@@ -1,0 +1,133 @@
+export type Rol           = 'AUDITOR' | 'DIRECTOR' | 'ADMIN'
+export type Area          = 'PRODUCTO' | 'SERVICIO' | 'LOCAL'
+export type Severidad     = 'NINGUNA' | 'LEVE' | 'MEDIA' | 'GRAVE'
+export type EstadoVisita  = 'PROGRAMADA' | 'REALIZADA' | 'CANCELADA'
+
+export interface AuUsuario {
+  cut:    string
+  nombre: string
+  rol:    Rol
+  activo: boolean
+}
+
+export interface AuMarca {
+  id:         string
+  nombre:     string
+  es_carpeta: boolean
+}
+
+export interface AuLocal {
+  id:                 string
+  nombre:             string
+  marca_id:           string
+  direccion:          string | null
+  encargado_nombre:   string | null
+  encargado_cut:      string | null
+  jefe_cocina_nombre: string | null
+  jefe_cocina_cut:    string | null
+  activo:             boolean
+}
+
+export interface AuDirectorLocal {
+  id:           string
+  director_cut: string
+  local_id:     string
+}
+
+export interface AuPlato {
+  id:     string
+  nombre: string
+  codigo: string | null
+  activo: boolean
+}
+
+export interface AuPlatoLocal {
+  id:       string
+  plato_id: string
+  local_id: string
+}
+
+export interface AuPlatoIngrediente {
+  id:       string
+  plato_id: string
+  nombre:   string
+  orden:    number
+  activo:   boolean
+}
+
+export interface AuAuditoria {
+  id:            string
+  local_id:      string
+  auditor_cut:   string
+  fecha:         string
+  mesero_nombre: string | null
+  nota_producto: number | null
+  nota_servicio: number | null
+  nota_local:    number | null
+  nota_total:    number | null
+  creado_en:     string
+}
+
+export interface AuAuditoriaProductoItem {
+  id:                 string
+  auditoria_id:       string
+  plato_id:           string
+  plato_nombre:       string
+  ingrediente_nombre: string
+  cumple:             boolean
+}
+
+export interface AuAuditoriaServicio {
+  id:                      string
+  auditoria_id:            string
+  fid_speech:              boolean | null
+  fid_nombre_camarero:     boolean | null
+  ups_bebidas:             boolean | null
+  ups_meta_dia:            boolean | null
+  pres_uniformes:          boolean | null
+  pres_cabellos:           boolean | null
+  pres_unas:               boolean | null
+  pres_zapatos:            boolean | null
+  pres_barba_o_maquillaje: boolean | null
+  tiempo_entrante_min:     number | null
+  tiempo_principal_min:    number | null
+  tiempo_bebida_min:       number | null
+  tiempo_postre_min:       number | null
+  tiempo_entrante_ok:      boolean | null
+  tiempo_principal_ok:     boolean | null
+  tiempo_bebida_ok:        boolean | null
+  tiempo_postre_ok:        boolean | null
+}
+
+export interface AuAuditoriaLocal {
+  id:               string
+  auditoria_id:     string
+  cart_actualizada: boolean | null
+  cart_completa:    boolean | null
+  limp_sala:        boolean | null
+  limp_banos:       boolean | null
+  limp_barras:      boolean | null
+}
+
+export interface AuObservacion {
+  id:           string
+  auditoria_id: string
+  area:         Area
+  texto:        string
+  severidad:    Severidad
+}
+
+export interface AuConfigSeveridad {
+  severidad: Severidad
+  descuento: number
+}
+
+export interface AuVisita {
+  id:          string
+  local_id:    string
+  auditor_cut: string
+  fecha:       string
+  hora:        string | null
+  estado:      EstadoVisita
+  notas:       string | null
+}

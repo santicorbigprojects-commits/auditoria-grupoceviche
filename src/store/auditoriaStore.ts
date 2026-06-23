@@ -1,0 +1,154 @@
+import { create } from 'zustand'
+import type { Area, Severidad } from '../types'
+
+export interface ProductoItemDraft {
+  plato_id:           string
+  plato_nombre:       string
+  ingrediente_nombre: string
+  cumple:             boolean
+}
+
+export interface ObservacionDraft {
+  id:        string   // UUID local para key de lista
+  area:      Area
+  texto:     string
+  severidad: Severidad
+}
+
+export interface ServicioDraft {
+  fid_speech:              boolean
+  fid_nombre_camarero:     boolean
+  ups_bebidas:             boolean
+  ups_meta_dia:            boolean
+  pres_uniformes:          boolean
+  pres_cabellos:           boolean
+  pres_unas:               boolean
+  pres_zapatos:            boolean
+  pres_barba_o_maquillaje: boolean
+  tiempo_entrante_min:     number | null
+  tiempo_principal_min:    number | null
+  tiempo_bebida_min:       number | null
+  tiempo_postre_min:       number | null
+  tiempo_entrante_ok:      boolean
+  tiempo_principal_ok:     boolean
+  tiempo_bebida_ok:        boolean
+  tiempo_postre_ok:        boolean
+}
+
+export interface LocalDraft {
+  cart_actualizada: boolean
+  cart_completa:    boolean
+  limp_sala:        boolean
+  limp_banos:       boolean
+  limp_barras:      boolean
+}
+
+const SERVICIO_INICIAL: ServicioDraft = {
+  fid_speech:              false,
+  fid_nombre_camarero:     false,
+  ups_bebidas:             false,
+  ups_meta_dia:            false,
+  pres_uniformes:          false,
+  pres_cabellos:           false,
+  pres_unas:               false,
+  pres_zapatos:            false,
+  pres_barba_o_maquillaje: false,
+  tiempo_entrante_min:     null,
+  tiempo_principal_min:    null,
+  tiempo_bebida_min:       null,
+  tiempo_postre_min:       null,
+  tiempo_entrante_ok:      false,
+  tiempo_principal_ok:     false,
+  tiempo_bebida_ok:        false,
+  tiempo_postre_ok:        false,
+}
+
+const LOCAL_INICIAL: LocalDraft = {
+  cart_actualizada: false,
+  cart_completa:    false,
+  limp_sala:        false,
+  limp_banos:       false,
+  limp_barras:      false,
+}
+
+interface AuditoriaState {
+  local_id:      string | null
+  fecha:         string
+  mesero_nombre: string
+  productoItems: ProductoItemDraft[]
+  servicio:      ServicioDraft
+  localChecklist: LocalDraft
+  observaciones: ObservacionDraft[]
+
+  setLocalId:        (id: string) => void
+  setFecha:          (fecha: string) => void
+  setMeseroNombre:   (nombre: string) => void
+  setProductoItems:  (items: ProductoItemDraft[]) => void
+  toggleCumple:      (plato_id: string, ingrediente_nombre: string) => void
+  setServicio:       (patch: Partial<ServicioDraft>) => void
+  setLocalChecklist: (patch: Partial<LocalDraft>) => void
+  addObservacion:    (obs: Omit<ObservacionDraft, 'id'>) => void
+  updateObservacion: (id: string, patch: Partial<ObservacionDraft>) => void
+  removeObservacion: (id: string) => void
+  reset:             () => void
+}
+
+const hoy = () => new Date().toISOString().slice(0, 10)
+
+export const useAuditoriaStore = create<AuditoriaState>()((set) => ({
+  local_id:       null,
+  fecha:          hoy(),
+  mesero_nombre:  '',
+  productoItems:  [],
+  servicio:       { ...SERVICIO_INICIAL },
+  localChecklist: { ...LOCAL_INICIAL },
+  observaciones:  [],
+
+  setLocalId:      (id)     => set({ local_id: id }),
+  setFecha:        (fecha)  => set({ fecha }),
+  setMeseroNombre: (nombre) => set({ mesero_nombre: nombre }),
+  setProductoItems:(items)  => set({ productoItems: items }),
+
+  toggleCumple: (plato_id, ingrediente_nombre) =>
+    set((s) => ({
+      productoItems: s.productoItems.map((i) =>
+        i.plato_id === plato_id && i.ingrediente_nombre === ingrediente_nombre
+          ? { ...i, cumple: !i.cumple }
+          : i,
+      ),
+    })),
+
+  setServicio: (patch) =>
+    set((s) => ({ servicio: { ...s.servicio, ...patch } })),
+
+  setLocalChecklist: (patch) =>
+    set((s) => ({ localChecklist: { ...s.localChecklist, ...patch } })),
+
+  addObservacion: (obs) =>
+    set((s) => ({
+      observaciones: [...s.observaciones, { ...obs, id: crypto.randomUUID() }],
+    })),
+
+  updateObservacion: (id, patch) =>
+    set((s) => ({
+      observaciones: s.observaciones.map((o) =>
+        o.id === id ? { ...o, ...patch } : o,
+      ),
+    })),
+
+  removeObservacion: (id) =>
+    set((s) => ({
+      observaciones: s.observaciones.filter((o) => o.id !== id),
+    })),
+
+  reset: () =>
+    set({
+      local_id:       null,
+      fecha:          hoy(),
+      mesero_nombre:  '',
+      productoItems:  [],
+      servicio:       { ...SERVICIO_INICIAL },
+      localChecklist: { ...LOCAL_INICIAL },
+      observaciones:  [],
+    }),
+}))
