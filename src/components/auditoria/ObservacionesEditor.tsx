@@ -1,5 +1,4 @@
 import type { Area, Severidad } from '../../types'
-import type { ObservacionDraft } from '../../store/auditoriaStore'
 import { useAuditoriaStore } from '../../store/auditoriaStore'
 
 const SEVERIDADES: Severidad[] = ['NINGUNA', 'LEVE', 'MEDIA', 'GRAVE']
