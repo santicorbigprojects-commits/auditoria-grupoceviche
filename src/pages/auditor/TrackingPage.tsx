@@ -8,11 +8,17 @@ import {
   calcularNotaLocal,
   calcularNotaTotal,
 } from '../../lib/calculo'
-import type { AuMarca, AuLocal, AuConfigSeveridad, Severidad } from '../../types'
+import type { AuMarca, AuLocal, AuConfigSeveridad, AuConfigTiempos, Severidad } from '../../types'
 import SeccionProducto, { type PlatoConIngredientes } from '../../components/auditoria/SeccionProducto'
 import SeccionServicio from '../../components/auditoria/SeccionServicio'
 import SeccionLocal from '../../components/auditoria/SeccionLocal'
 import PanelNotas from '../../components/auditoria/PanelNotas'
+
+type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
+
+const TIEMPOS_DEFAULT: Record<TimeKey, number> = {
+  entrante: 10, principal: 20, bebida: 5, postre: 10,
+}
 
 interface Grupo { marca: AuMarca; locales: AuLocal[] }
 
@@ -29,6 +35,9 @@ export default function TrackingPage() {
   // Platos del local seleccionado
   const [platos,        setPlatos]        = useState<PlatoConIngredientes[]>([])
   const [loadingPlatos, setLoadingPlatos] = useState(false)
+
+  // Tiempos objetivo cargados de au_config_tiempos
+  const [tiemposMax, setTiemposMax] = useState<Record<TimeKey, number>>({ ...TIEMPOS_DEFAULT })
 
   // Platos que el auditor eligió evaluar este turno
   const [platosSeleccionados, setPlatosSeleccionados] = useState<Set<string>>(new Set())
@@ -55,7 +64,7 @@ export default function TrackingPage() {
     load()
   }, [])
 
-  /* ── Carga de platos al cambiar local ──────────────────────────────── */
+  /* ── Carga de platos + tiempos al cambiar local ─────────────────────── */
   useEffect(() => {
     if (!store.local_id) { setPlatos([]); return }
 
@@ -81,7 +90,34 @@ export default function TrackingPage() {
       setPlatos(result)
       setLoadingPlatos(false)
     }
+
+    async function loadTiempos() {
+      const { data } = await supabase
+        .from('au_config_tiempos')
+        .select('*')
+        .or(`local_id.is.null,local_id.eq.${store.local_id}`)
+      const rows: AuConfigTiempos[] = data ?? []
+
+      // Globals first, then override with local-specific values
+      const merged = { ...TIEMPOS_DEFAULT }
+      const tipoMap: Record<string, TimeKey> = {
+        ENTRANTE: 'entrante', PRINCIPAL: 'principal', BEBIDA: 'bebida', POSTRE: 'postre',
+      }
+      // Apply globals
+      rows.filter(r => r.local_id === null).forEach(r => {
+        const k = tipoMap[r.tipo]
+        if (k) merged[k] = r.max_min
+      })
+      // Apply local overrides
+      rows.filter(r => r.local_id === store.local_id).forEach(r => {
+        const k = tipoMap[r.tipo]
+        if (k) merged[k] = r.max_min
+      })
+      setTiemposMax(merged)
+    }
+
     loadPlatos()
+    loadTiempos()
   }, [store.local_id])
 
   /* ── Reset de selección al cambiar local ───────────────────────────── */
@@ -108,7 +144,9 @@ export default function TrackingPage() {
           plato_id:           plato.id,
           plato_nombre:       plato.nombre,
           ingrediente_nombre: ing.nombre,
-          cumple:             false,
+          contiene:           false,
+          limpieza:           false,
+          peso_adecuado:      false,
         }))
       store.setProductoItems([...store.productoItems, ...nuevos])
     }
@@ -139,14 +177,17 @@ export default function TrackingPage() {
       const { data: cab, error: e1 } = await supabase
         .from('au_auditorias')
         .insert({
-          local_id:      store.local_id,
-          auditor_cut:   cut,
-          fecha:         store.fecha,
-          mesero_nombre: store.mesero_nombre || null,
-          nota_producto: +notaP.toFixed(2),
-          nota_servicio: +notaS.toFixed(2),
-          nota_local:    +notaL.toFixed(2),
-          nota_total:    +notaT.toFixed(2),
+          local_id:             store.local_id,
+          auditor_cut:          cut,
+          fecha:                store.fecha,
+          mesero_nombre:        store.mesero_nombre || null,
+          nota_producto:        +notaP.toFixed(2),
+          nota_servicio:        +notaS.toFixed(2),
+          nota_local:           +notaL.toFixed(2),
+          nota_total:           +notaT.toFixed(2),
+          oportunidad_producto: store.oportunidad_producto || null,
+          oportunidad_servicio: store.oportunidad_servicio || null,
+          oportunidad_local:    store.oportunidad_local    || null,
         })
         .select('id')
         .single()
@@ -162,7 +203,10 @@ export default function TrackingPage() {
             plato_id:           i.plato_id,
             plato_nombre:       i.plato_nombre,
             ingrediente_nombre: i.ingrediente_nombre,
-            cumple:             i.cumple,
+            cumple:             i.contiene && i.limpieza && i.peso_adecuado, // retrocompat
+            contiene:           i.contiene,
+            limpieza:           i.limpieza,
+            peso_adecuado:      i.peso_adecuado,
           }))
         )
         if (e2) throw e2
@@ -314,7 +358,7 @@ export default function TrackingPage() {
                   platosSeleccionados={platosSeleccionados}
                   onTogglePlato={handleTogglePlato}
                 />
-                <SeccionServicio />
+                <SeccionServicio tiemposMax={tiemposMax} />
                 <SeccionLocal />
               </>
             )

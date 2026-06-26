@@ -2,7 +2,7 @@ import { useAuditoriaStore, type LocalDraft } from '../../store/auditoriaStore'
 import ObservacionesEditor from './ObservacionesEditor'
 
 export default function SeccionLocal() {
-  const { localChecklist, setLocalChecklist } = useAuditoriaStore()
+  const { localChecklist, setLocalChecklist, oportunidad_local, setOportunidad } = useAuditoriaStore()
 
   function toggle(field: keyof LocalDraft) {
     setLocalChecklist({ [field]: !localChecklist[field] } as Partial<LocalDraft>)
@@ -27,6 +27,22 @@ export default function SeccionLocal() {
       </Group>
 
       <ObservacionesEditor area="LOCAL" />
+
+      {/* Oportunidades de mejora — texto libre, no puntúa */}
+      <div className="mt-4 pt-4 border-t border-navy/10">
+        <p className="text-xs font-semibold text-navy/40 uppercase tracking-wide mb-2">
+          Oportunidades de mejora
+        </p>
+        <textarea
+          value={oportunidad_local}
+          onChange={e => setOportunidad('LOCAL', e.target.value)}
+          placeholder="Notas y oportunidades de mejora para Local…"
+          rows={2}
+          className="w-full text-sm px-3 py-2 rounded-xl border border-navy/15 bg-white resize-none
+                     text-navy placeholder:text-navy/25
+                     focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy/40 transition"
+        />
+      </div>
     </div>
   )
 }

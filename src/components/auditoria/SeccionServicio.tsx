@@ -1,9 +1,8 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useAuditoriaStore, type ServicioDraft } from '../../store/auditoriaStore'
 import ObservacionesEditor from './ObservacionesEditor'
 
 type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
-type Rango   = { min: number | ''; max: number | '' }
 
 const TIEMPOS: { key: TimeKey; label: string }[] = [
   { key: 'entrante',  label: 'Entrante' },
@@ -12,46 +11,23 @@ const TIEMPOS: { key: TimeKey; label: string }[] = [
   { key: 'postre',    label: 'Postre' },
 ]
 
-export default function SeccionServicio() {
-  const { servicio, setServicio, mesero_nombre, setMeseroNombre } = useAuditoriaStore()
+interface Props {
+  tiemposMax: Record<TimeKey, number>
+}
 
-  // Rangos objetivo: solo para calcular _ok en el frontend, no se persisten en BD
-  const [rangos, setRangos] = useState<Record<TimeKey, Rango>>({
-    entrante:  { min: '', max: '' },
-    principal: { min: '', max: '' },
-    bebida:    { min: '', max: '' },
-    postre:    { min: '', max: '' },
-  })
+export default function SeccionServicio({ tiemposMax }: Props) {
+  const { servicio, setServicio, mesero_nombre, setMeseroNombre, oportunidad_servicio, setOportunidad } = useAuditoriaStore()
 
   function toggle(field: keyof ServicioDraft) {
     setServicio({ [field]: !servicio[field] } as Partial<ServicioDraft>)
   }
 
   function setTiempoReal(key: TimeKey, val: string) {
-    const n     = val === '' ? null : Number(val)
+    const n    = val === '' ? null : Number(val)
     const realK = `tiempo_${key}_min` as keyof ServicioDraft
     const okK   = `tiempo_${key}_ok`  as keyof ServicioDraft
-    const { min, max } = rangos[key]
-    const ok = n !== null && min !== '' && max !== ''
-      ? n >= Number(min) && n <= Number(max)
-      : false
+    const ok    = n !== null ? n <= tiemposMax[key] : false
     setServicio({ [realK]: n, [okK]: ok } as Partial<ServicioDraft>)
-  }
-
-  function setRango(key: TimeKey, field: 'min' | 'max', val: string) {
-    const n       = val === '' ? '' : Number(val)
-    const updated = { ...rangos[key], [field]: n }
-    setRangos(r => ({ ...r, [key]: updated }))
-    // Recalculate ok with the updated range
-    const realK = `tiempo_${key}_min` as keyof ServicioDraft
-    const okK   = `tiempo_${key}_ok`  as keyof ServicioDraft
-    const real  = servicio[realK] as number | null
-    const minV  = field === 'min' ? n : rangos[key].min
-    const maxV  = field === 'max' ? n : rangos[key].max
-    const ok    = real !== null && minV !== '' && maxV !== ''
-      ? real >= Number(minV) && real <= Number(maxV)
-      : false
-    setServicio({ [okK]: ok } as Partial<ServicioDraft>)
   }
 
   return (
@@ -85,17 +61,17 @@ export default function SeccionServicio() {
 
       {/* Upselling */}
       <Group titulo="Upselling">
-        <Item label="Oferta de bebidas"      checked={!!servicio.ups_bebidas}  onToggle={() => toggle('ups_bebidas')} />
-        <Item label="Comunicó meta del día"  checked={!!servicio.ups_meta_dia} onToggle={() => toggle('ups_meta_dia')} />
+        <Item label="Oferta de bebidas"     checked={!!servicio.ups_bebidas}  onToggle={() => toggle('ups_bebidas')} />
+        <Item label="Comunicó meta del día" checked={!!servicio.ups_meta_dia} onToggle={() => toggle('ups_meta_dia')} />
       </Group>
 
       {/* Presentación */}
       <Group titulo="Presentación">
-        <Item label="Uniformes"           checked={!!servicio.pres_uniformes}          onToggle={() => toggle('pres_uniformes')} />
-        <Item label="Cabellos recogidos"  checked={!!servicio.pres_cabellos}           onToggle={() => toggle('pres_cabellos')} />
-        <Item label="Uñas cuidadas"       checked={!!servicio.pres_unas}               onToggle={() => toggle('pres_unas')} />
-        <Item label="Zapatos adecuados"   checked={!!servicio.pres_zapatos}            onToggle={() => toggle('pres_zapatos')} />
-        <Item label="Barba / Maquillaje"  checked={!!servicio.pres_barba_o_maquillaje} onToggle={() => toggle('pres_barba_o_maquillaje')} />
+        <Item label="Uniformes"          checked={!!servicio.pres_uniformes}          onToggle={() => toggle('pres_uniformes')} />
+        <Item label="Cabellos recogidos" checked={!!servicio.pres_cabellos}           onToggle={() => toggle('pres_cabellos')} />
+        <Item label="Uñas cuidadas"      checked={!!servicio.pres_unas}               onToggle={() => toggle('pres_unas')} />
+        <Item label="Zapatos adecuados"  checked={!!servicio.pres_zapatos}            onToggle={() => toggle('pres_zapatos')} />
+        <Item label="Barba / Maquillaje" checked={!!servicio.pres_barba_o_maquillaje} onToggle={() => toggle('pres_barba_o_maquillaje')} />
       </Group>
 
       {/* Tiempos */}
@@ -109,31 +85,25 @@ export default function SeccionServicio() {
             const okK   = `tiempo_${key}_ok`  as keyof ServicioDraft
             const real  = servicio[realK] as number | null
             const ok    = servicio[okK]   as boolean
-            const rango = rangos[key]
 
             return (
-              <div key={key} className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 items-end">
-                <p className="text-xs text-navy/50 pb-1.5 w-24">{label}</p>
-                <NumInput
-                  label="Real"
-                  value={real ?? ''}
-                  onChange={v => setTiempoReal(key, v)}
-                  placeholder="min"
-                />
-                <NumInput
-                  label="Obj. mín"
-                  value={rango.min}
-                  onChange={v => setRango(key, 'min', v)}
-                  placeholder="0"
-                  muted
-                />
-                <NumInput
-                  label="Obj. máx"
-                  value={rango.max}
-                  onChange={v => setRango(key, 'max', v)}
-                  placeholder="∞"
-                  muted
-                />
+              <div key={key} className="grid grid-cols-[auto_1fr_auto] gap-2 items-end">
+                <p className="text-xs text-navy/50 pb-1.5 w-28">{label}</p>
+                <div>
+                  <p className="text-xs text-navy/30 mb-1">
+                    Real <span className="text-navy/20">(máx {tiemposMax[key]} min)</span>
+                  </p>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    value={real ?? ''}
+                    onChange={e => setTiempoReal(key, e.target.value)}
+                    placeholder="min"
+                    className="w-full px-2 py-1.5 text-sm rounded-lg border border-navy/20 bg-white text-navy
+                               focus:outline-none focus:ring-2 focus:ring-ambar/30 placeholder:text-navy/20 transition"
+                  />
+                </div>
                 <div className="pb-1 flex items-center justify-center w-7">
                   {real !== null
                     ? ok
@@ -149,6 +119,22 @@ export default function SeccionServicio() {
       </div>
 
       <ObservacionesEditor area="SERVICIO" />
+
+      {/* Oportunidades de mejora — texto libre, no puntúa */}
+      <div className="mt-4 pt-4 border-t border-navy/10">
+        <p className="text-xs font-semibold text-navy/40 uppercase tracking-wide mb-2">
+          Oportunidades de mejora
+        </p>
+        <textarea
+          value={oportunidad_servicio}
+          onChange={e => setOportunidad('SERVICIO', e.target.value)}
+          placeholder="Notas y oportunidades de mejora para Servicio…"
+          rows={2}
+          className="w-full text-sm px-3 py-2 rounded-xl border border-navy/15 bg-white resize-none
+                     text-navy placeholder:text-navy/25
+                     focus:outline-none focus:ring-2 focus:ring-ambar/30 focus:border-ambar transition"
+        />
+      </div>
     </div>
   )
 }
@@ -186,32 +172,6 @@ function Item({ label, checked, onToggle }: { label: string; checked: boolean; o
       </span>
       {label}
     </button>
-  )
-}
-
-function NumInput({
-  label, value, onChange, placeholder, muted,
-}: {
-  label: string; value: number | ''; onChange: (v: string) => void; placeholder?: string; muted?: boolean
-}) {
-  return (
-    <div>
-      <p className="text-xs text-navy/30 mb-1">{label}</p>
-      <input
-        type="number"
-        min={0}
-        step={0.5}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={`w-full px-2 py-1.5 text-sm rounded-lg border focus:outline-none transition
-          focus:ring-2 focus:ring-ambar/30 placeholder:text-navy/20 ${
-          muted
-            ? 'border-navy/15 bg-white/70 text-navy/50'
-            : 'border-navy/20 bg-white text-navy'
-        }`}
-      />
-    </div>
   )
 }
 

@@ -22,7 +22,7 @@ export default function ObservacionesEditor({ area }: Props) {
     <div className="mt-5 pt-4 border-t border-navy/10">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold text-navy/40 uppercase tracking-wide">
-          Oportunidades de mejora
+          Observaciones
         </span>
         <button
           type="button"
@@ -37,7 +37,7 @@ export default function ObservacionesEditor({ area }: Props) {
       </div>
 
       {obs.length === 0 && (
-        <p className="text-xs text-navy/25 italic">Sin observaciones para esta área.</p>
+        <p className="text-xs text-navy/25 italic">Sin observaciones registradas para esta área.</p>
       )}
 
       <div className="space-y-2">
@@ -46,7 +46,7 @@ export default function ObservacionesEditor({ area }: Props) {
             <textarea
               value={o.texto}
               onChange={e => updateObservacion(o.id, { texto: e.target.value })}
-              placeholder="Describe la oportunidad de mejora…"
+              placeholder="Describe la observación…"
               rows={2}
               className="flex-1 text-sm px-3 py-2 rounded-xl border border-navy/15 bg-white resize-none
                          text-navy placeholder:text-navy/25

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { AuPlato, AuPlatoIngrediente } from '../../types'
-import { useAuditoriaStore } from '../../store/auditoriaStore'
+import { useAuditoriaStore, type ProductoItemDraft } from '../../store/auditoriaStore'
 import ObservacionesEditor from './ObservacionesEditor'
 
 export interface PlatoConIngredientes extends AuPlato {
@@ -8,13 +8,21 @@ export interface PlatoConIngredientes extends AuPlato {
 }
 
 interface Props {
-  platos:               PlatoConIngredientes[]
-  platosSeleccionados:  Set<string>
-  onTogglePlato:        (platoId: string, plato: PlatoConIngredientes) => void
+  platos:              PlatoConIngredientes[]
+  platosSeleccionados: Set<string>
+  onTogglePlato:       (platoId: string, plato: PlatoConIngredientes) => void
 }
 
+type CheckCampo = 'contiene' | 'limpieza' | 'peso_adecuado'
+
+const CHECKS: { campo: CheckCampo; label: string }[] = [
+  { campo: 'contiene',      label: 'Contiene' },
+  { campo: 'limpieza',      label: 'Limpieza' },
+  { campo: 'peso_adecuado', label: 'Peso adecuado' },
+]
+
 export default function SeccionProducto({ platos, platosSeleccionados, onTogglePlato }: Props) {
-  const { productoItems, toggleCumple } = useAuditoriaStore()
+  const { productoItems, toggleCheck, oportunidad_producto, setOportunidad } = useAuditoriaStore()
 
   return (
     <Card titulo="Producto" dot="bg-naranja" border="border-naranja/30" bg="bg-naranja/5">
@@ -55,9 +63,11 @@ export default function SeccionProducto({ platos, platosSeleccionados, onToggleP
           {platos
             .filter(p => platosSeleccionados.has(p.id))
             .map(plato => {
-              const items = productoItems.filter(i => i.plato_id === plato.id)
-              const ok    = items.filter(i => i.cumple).length
-              const tot   = items.length
+              const items   = productoItems.filter(i => i.plato_id === plato.id)
+              const marcadas = items.reduce((s, i) =>
+                s + (i.contiene ? 1 : 0) + (i.limpieza ? 1 : 0) + (i.peso_adecuado ? 1 : 0), 0)
+              const total = items.length * 3
+
               return (
                 <div key={plato.id} className="mb-5">
                   <div className="flex items-center justify-between mb-2">
@@ -67,39 +77,52 @@ export default function SeccionProducto({ platos, platosSeleccionados, onToggleP
                         <span className="ml-1.5 text-xs text-navy/40 font-normal">{plato.codigo}</span>
                       )}
                     </h4>
-                    {tot > 0 && (
-                      <span className="text-xs text-navy/40">{ok}/{tot}</span>
+                    {total > 0 && (
+                      <span className="text-xs text-navy/40">{marcadas}/{total} checks</span>
                     )}
                   </div>
 
                   {plato.ingredientes.length === 0 ? (
                     <p className="text-xs text-navy/30 italic">Sin ingredientes configurados.</p>
                   ) : (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {plato.ingredientes.map(ing => {
-                        const item   = items.find(i => i.ingrediente_nombre === ing.nombre)
-                        const cumple = item?.cumple ?? false
+                        const item = items.find(i => i.ingrediente_nombre === ing.nombre)
                         return (
-                          <button
+                          <div
                             key={ing.id}
-                            type="button"
-                            onClick={() => toggleCumple(plato.id, ing.nombre)}
-                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-left border transition ${
-                              cumple
-                                ? 'bg-green-50 border-green-200 text-green-800'
-                                : 'bg-white border-navy/15 text-navy/60 hover:border-navy/30'
-                            }`}
+                            className="px-3 py-2.5 rounded-xl bg-white border border-navy/10"
                           >
-                            <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
-                              cumple ? 'bg-green-500 text-white' : 'border-2 border-navy/20'
-                            }`}>
-                              {cumple
-                                ? <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                : <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                              }
-                            </span>
-                            {ing.nombre}
-                          </button>
+                            <p className="text-xs font-semibold text-navy mb-2">{ing.nombre}</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {CHECKS.map(({ campo, label }) => {
+                                const val = (item?.[campo as keyof ProductoItemDraft] ?? false) as boolean
+                                return (
+                                  <button
+                                    key={campo}
+                                    type="button"
+                                    onClick={() => toggleCheck(plato.id, ing.nombre, campo)}
+                                    className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-xs text-center border transition ${
+                                      val
+                                        ? 'bg-green-50 border-green-200 text-green-800'
+                                        : 'bg-white border-navy/15 text-navy/50 hover:border-navy/30'
+                                    }`}
+                                  >
+                                    <span className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                      val ? 'bg-green-500 text-white' : 'border-2 border-navy/20'
+                                    }`}>
+                                      {val && (
+                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      )}
+                                    </span>
+                                    {label}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
                         )
                       })}
                     </div>
@@ -111,6 +134,22 @@ export default function SeccionProducto({ platos, platosSeleccionados, onToggleP
       )}
 
       <ObservacionesEditor area="PRODUCTO" />
+
+      {/* Oportunidades de mejora — texto libre, no puntúa */}
+      <div className="mt-4 pt-4 border-t border-navy/10">
+        <p className="text-xs font-semibold text-navy/40 uppercase tracking-wide mb-2">
+          Oportunidades de mejora
+        </p>
+        <textarea
+          value={oportunidad_producto}
+          onChange={e => setOportunidad('PRODUCTO', e.target.value)}
+          placeholder="Notas y oportunidades de mejora para Producto…"
+          rows={2}
+          className="w-full text-sm px-3 py-2 rounded-xl border border-navy/15 bg-white resize-none
+                     text-navy placeholder:text-navy/25
+                     focus:outline-none focus:ring-2 focus:ring-naranja/30 focus:border-naranja transition"
+        />
+      </div>
     </Card>
   )
 }

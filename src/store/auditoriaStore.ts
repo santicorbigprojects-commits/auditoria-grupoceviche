@@ -5,7 +5,9 @@ export interface ProductoItemDraft {
   plato_id:           string
   plato_nombre:       string
   ingrediente_nombre: string
-  cumple:             boolean
+  contiene:           boolean
+  limpieza:           boolean
+  peso_adecuado:      boolean
 }
 
 export interface ObservacionDraft {
@@ -72,48 +74,55 @@ const LOCAL_INICIAL: LocalDraft = {
 }
 
 interface AuditoriaState {
-  local_id:      string | null
-  fecha:         string
-  mesero_nombre: string
-  productoItems: ProductoItemDraft[]
-  servicio:      ServicioDraft
-  localChecklist: LocalDraft
-  observaciones: ObservacionDraft[]
+  local_id:             string | null
+  fecha:                string
+  mesero_nombre:        string
+  productoItems:        ProductoItemDraft[]
+  servicio:             ServicioDraft
+  localChecklist:       LocalDraft
+  observaciones:        ObservacionDraft[]
+  oportunidad_producto: string
+  oportunidad_servicio: string
+  oportunidad_local:    string
 
   setLocalId:        (id: string) => void
   setFecha:          (fecha: string) => void
   setMeseroNombre:   (nombre: string) => void
   setProductoItems:  (items: ProductoItemDraft[]) => void
-  toggleCumple:      (plato_id: string, ingrediente_nombre: string) => void
+  toggleCheck:       (plato_id: string, ingrediente_nombre: string, campo: 'contiene' | 'limpieza' | 'peso_adecuado') => void
   setServicio:       (patch: Partial<ServicioDraft>) => void
   setLocalChecklist: (patch: Partial<LocalDraft>) => void
   addObservacion:    (obs: Omit<ObservacionDraft, 'id'>) => void
   updateObservacion: (id: string, patch: Partial<ObservacionDraft>) => void
   removeObservacion: (id: string) => void
+  setOportunidad:    (area: Area, texto: string) => void
   reset:             () => void
 }
 
 const hoy = () => new Date().toISOString().slice(0, 10)
 
 export const useAuditoriaStore = create<AuditoriaState>()((set) => ({
-  local_id:       null,
-  fecha:          hoy(),
-  mesero_nombre:  '',
-  productoItems:  [],
-  servicio:       { ...SERVICIO_INICIAL },
-  localChecklist: { ...LOCAL_INICIAL },
-  observaciones:  [],
+  local_id:             null,
+  fecha:                hoy(),
+  mesero_nombre:        '',
+  productoItems:        [],
+  servicio:             { ...SERVICIO_INICIAL },
+  localChecklist:       { ...LOCAL_INICIAL },
+  observaciones:        [],
+  oportunidad_producto: '',
+  oportunidad_servicio: '',
+  oportunidad_local:    '',
 
   setLocalId:      (id)     => set({ local_id: id }),
   setFecha:        (fecha)  => set({ fecha }),
   setMeseroNombre: (nombre) => set({ mesero_nombre: nombre }),
   setProductoItems:(items)  => set({ productoItems: items }),
 
-  toggleCumple: (plato_id, ingrediente_nombre) =>
+  toggleCheck: (plato_id, ingrediente_nombre, campo) =>
     set((s) => ({
       productoItems: s.productoItems.map((i) =>
         i.plato_id === plato_id && i.ingrediente_nombre === ingrediente_nombre
-          ? { ...i, cumple: !i.cumple }
+          ? { ...i, [campo]: !i[campo] }
           : i,
       ),
     })),
@@ -141,14 +150,24 @@ export const useAuditoriaStore = create<AuditoriaState>()((set) => ({
       observaciones: s.observaciones.filter((o) => o.id !== id),
     })),
 
+  setOportunidad: (area, texto) =>
+    set(area === 'PRODUCTO'
+      ? { oportunidad_producto: texto }
+      : area === 'SERVICIO'
+      ? { oportunidad_servicio: texto }
+      : { oportunidad_local: texto }),
+
   reset: () =>
     set({
-      local_id:       null,
-      fecha:          hoy(),
-      mesero_nombre:  '',
-      productoItems:  [],
-      servicio:       { ...SERVICIO_INICIAL },
-      localChecklist: { ...LOCAL_INICIAL },
-      observaciones:  [],
+      local_id:             null,
+      fecha:                hoy(),
+      mesero_nombre:        '',
+      productoItems:        [],
+      servicio:             { ...SERVICIO_INICIAL },
+      localChecklist:       { ...LOCAL_INICIAL },
+      observaciones:        [],
+      oportunidad_producto: '',
+      oportunidad_servicio: '',
+      oportunidad_local:    '',
     }),
 }))

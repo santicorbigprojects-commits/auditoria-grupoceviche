@@ -56,16 +56,19 @@ export interface AuPlatoIngrediente {
 }
 
 export interface AuAuditoria {
-  id:            string
-  local_id:      string
-  auditor_cut:   string
-  fecha:         string
-  mesero_nombre: string | null
-  nota_producto: number | null
-  nota_servicio: number | null
-  nota_local:    number | null
-  nota_total:    number | null
-  creado_en:     string
+  id:                   string
+  local_id:             string
+  auditor_cut:          string
+  fecha:                string
+  mesero_nombre:        string | null
+  nota_producto:        number | null
+  nota_servicio:        number | null
+  nota_local:           number | null
+  nota_total:           number | null
+  oportunidad_producto: string | null
+  oportunidad_servicio: string | null
+  oportunidad_local:    string | null
+  creado_en:            string
 }
 
 export interface AuAuditoriaProductoItem {
@@ -74,7 +77,19 @@ export interface AuAuditoriaProductoItem {
   plato_id:           string
   plato_nombre:       string
   ingrediente_nombre: string
-  cumple:             boolean
+  cumple:             boolean        // solo auditorías antiguas
+  contiene:           boolean | null
+  limpieza:           boolean | null
+  peso_adecuado:      boolean | null
+}
+
+export type TipoTiempo = 'ENTRANTE' | 'PRINCIPAL' | 'BEBIDA' | 'POSTRE'
+
+export interface AuConfigTiempos {
+  id:       string
+  local_id: string | null
+  tipo:     TipoTiempo
+  max_min:  number
 }
 
 export interface AuAuditoriaServicio {

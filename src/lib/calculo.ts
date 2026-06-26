@@ -3,7 +3,9 @@ import type { Area, Severidad } from '../types'
 const AREA_MAX = 20 / 3  // 6.6̄ puntos por área
 
 export interface ItemProducto {
-  cumple: boolean
+  contiene:      boolean
+  limpieza:      boolean
+  peso_adecuado: boolean
 }
 
 export interface ItemServicio {
@@ -59,10 +61,11 @@ export function calcularNotaProducto(
   obs:    ObservacionCalculo[],
   config?: ConfigSeveridad,
 ): number {
-  // TODO confirmar con Santi: sin platos evaluados → nota_base plena (no penalizar)
-  const base = items.length === 0
-    ? AREA_MAX
-    : (items.filter(i => i.cumple).length / items.length) * AREA_MAX
+  const marcadas = items.reduce((s, i) =>
+    s + (i.contiene ? 1 : 0) + (i.limpieza ? 1 : 0) + (i.peso_adecuado ? 1 : 0), 0)
+  const total = items.length * 3
+  // Sin platos evaluados → nota plena 6.67 (comportamiento confirmado)
+  const base = items.length === 0 ? AREA_MAX : (marcadas / total) * AREA_MAX
 
   return Math.max(0, base - descuento(obs, 'PRODUCTO', config))
 }
