@@ -461,16 +461,23 @@ function EvidRO({ evids, onLightbox }: { evids: AuEvidencia[]; onLightbox: (url:
       <p className="text-xs font-semibold text-navy/40 uppercase tracking-wide mb-2">
         Evidencias ({evids.length})
       </p>
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {evids.map(ev => (
-          <button
-            key={ev.id}
-            type="button"
-            onClick={() => onLightbox(ev.url)}
-            className="aspect-square rounded-xl overflow-hidden border border-navy/10 hover:opacity-80 transition"
-          >
-            <img src={ev.url} alt="evidencia" className="w-full h-full object-cover" />
-          </button>
+          <div key={ev.id} className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => onLightbox(ev.url)}
+              className="aspect-square rounded-xl overflow-hidden border border-navy/10 hover:opacity-80 transition"
+            >
+              <img src={ev.url} alt="evidencia" className="w-full h-full object-cover" />
+            </button>
+            {ev.etiqueta && (
+              <p className="text-[10px] text-center text-navy/50 leading-tight px-0.5 truncate"
+                 title={ev.etiqueta}>
+                {ev.etiqueta}
+              </p>
+            )}
+          </div>
         ))}
       </div>
     </div>

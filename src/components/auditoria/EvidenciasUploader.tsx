@@ -3,15 +3,39 @@ import { supabase } from '../../lib/supabase'
 import { useAuditoriaStore, type EvidenciaDraft } from '../../store/auditoriaStore'
 import type { Area } from '../../types'
 
-interface Props {
-  area: Area
-}
+/* ── Opciones de etiqueta por área ─────────────────────────────────────── */
+
+const ETIQUETAS_SERVICIO = [
+  'Speech de bienvenida',
+  'Nombre del camarero',
+  'Oferta de bebidas',
+  'Meta del día',
+  'Uniformes',
+  'Cabellos',
+  'Uñas',
+  'Zapatos',
+  'Barba / Maquillaje',
+  'Tiempo entrante',
+  'Tiempo plato principal',
+  'Tiempo bebida',
+  'Tiempo postre',
+]
+
+const ETIQUETAS_LOCAL = [
+  'Cartelería actualizada',
+  'Cartelería completa',
+  'Limpieza sala',
+  'Limpieza baños',
+  'Limpieza barras',
+]
+
+/* ── Compresión de imagen ───────────────────────────────────────────────── */
 
 async function comprimirImagen(file: File): Promise<Blob> {
   const MAX_W   = 1280
   const QUALITY = 0.7
   return new Promise((resolve, reject) => {
-    const img = new Image()
+    const img       = new Image()
     const objectUrl = URL.createObjectURL(file)
     img.onload = () => {
       URL.revokeObjectURL(objectUrl)
@@ -33,8 +57,21 @@ async function comprimirImagen(file: File): Promise<Blob> {
   })
 }
 
+/* ── Componente ─────────────────────────────────────────────────────────── */
+
+interface Props {
+  area: Area
+}
+
 export default function EvidenciasUploader({ area }: Props) {
-  const { evidencias, addEvidencia, removeEvidencia } = useAuditoriaStore()
+  const {
+    evidencias,
+    productoItems,
+    addEvidencia,
+    removeEvidencia,
+    setEvidenciaEtiqueta,
+  } = useAuditoriaStore()
+
   const fotos    = evidencias[area]
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -42,6 +79,16 @@ export default function EvidenciasUploader({ area }: Props) {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [eliminando,  setEliminando]  = useState<string | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
+
+  // Opciones del selector según área
+  const opciones: string[] =
+    area === 'PRODUCTO'
+      ? [...new Set(productoItems.map(i => i.ingrediente_nombre))]
+      : area === 'SERVICIO'
+      ? ETIQUETAS_SERVICIO
+      : ETIQUETAS_LOCAL
+
+  const selectorDeshabilitado = area === 'PRODUCTO' && productoItems.length === 0
 
   async function handleFiles(files: FileList) {
     setSubiendo(true)
@@ -118,31 +165,53 @@ export default function EvidenciasUploader({ area }: Props) {
       )}
 
       {fotos.length > 0 && (
-        <div className="grid grid-cols-4 gap-2 mt-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
           {fotos.map(ev => (
-            <div key={ev.path} className="relative group aspect-square">
-              <img
-                src={ev.url}
-                alt="evidencia"
-                onClick={() => setLightboxUrl(ev.url)}
-                className="w-full h-full object-cover rounded-xl cursor-zoom-in border border-navy/10"
-              />
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); handleDelete(ev) }}
-                disabled={eliminando === ev.path}
-                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-terranova text-white text-[10px]
-                           flex items-center justify-center
-                           opacity-0 group-hover:opacity-100 disabled:opacity-50
-                           transition-opacity leading-none"
+            <div key={ev.path} className="flex flex-col gap-1">
+
+              {/* Miniatura */}
+              <div className="relative group aspect-square">
+                <img
+                  src={ev.url}
+                  alt="evidencia"
+                  onClick={() => setLightboxUrl(ev.url)}
+                  className="w-full h-full object-cover rounded-xl cursor-zoom-in border border-navy/10"
+                />
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); handleDelete(ev) }}
+                  disabled={eliminando === ev.path}
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-terranova text-white text-[10px]
+                             flex items-center justify-center
+                             opacity-0 group-hover:opacity-100 disabled:opacity-50
+                             transition-opacity leading-none"
+                >
+                  ✕
+                </button>
+                {eliminando === ev.path && (
+                  <div className="absolute inset-0 rounded-xl bg-white/60 flex items-center justify-center">
+                    <div className="w-4 h-4 rounded-full border-2 border-terranova border-t-transparent animate-spin" />
+                  </div>
+                )}
+              </div>
+
+              {/* Selector de etiqueta */}
+              <select
+                value={ev.etiqueta ?? ''}
+                onChange={e => setEvidenciaEtiqueta(area, ev.path, e.target.value || undefined)}
+                disabled={selectorDeshabilitado || eliminando === ev.path}
+                title={selectorDeshabilitado ? 'Selecciona platos primero' : 'Etiqueta (opcional)'}
+                className="w-full text-[10px] rounded-lg border border-navy/15 bg-white text-navy/60
+                           px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-naranja/30
+                           focus:border-naranja transition
+                           disabled:opacity-35 disabled:cursor-not-allowed"
               >
-                ✕
-              </button>
-              {eliminando === ev.path && (
-                <div className="absolute inset-0 rounded-xl bg-white/60 flex items-center justify-center">
-                  <div className="w-4 h-4 rounded-full border-2 border-terranova border-t-transparent animate-spin" />
-                </div>
-              )}
+                <option value="">Sin etiqueta</option>
+                {opciones.map(o => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
+
             </div>
           ))}
         </div>

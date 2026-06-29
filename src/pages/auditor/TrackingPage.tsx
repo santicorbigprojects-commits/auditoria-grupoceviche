@@ -240,7 +240,7 @@ export default function TrackingPage() {
       // 6. Evidencias (batch)
       const AREAS: Area[] = ['PRODUCTO', 'SERVICIO', 'LOCAL']
       const evidRows = AREAS.flatMap(area =>
-        store.evidencias[area].map(ev => ({ auditoria_id: aid, area, url: ev.url }))
+        store.evidencias[area].map(ev => ({ auditoria_id: aid, area, url: ev.url, etiqueta: ev.etiqueta ?? null }))
       )
       if (evidRows.length > 0) {
         const { error: e6 } = await supabase.from('au_evidencias').insert(evidRows)

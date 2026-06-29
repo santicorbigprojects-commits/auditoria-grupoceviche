@@ -142,6 +142,7 @@ export interface AuEvidencia {
   auditoria_id: string
   area:         Area
   url:          string
+  etiqueta:     string | null
 }
 
 export interface AuVisita {

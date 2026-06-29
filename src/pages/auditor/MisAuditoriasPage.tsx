@@ -335,7 +335,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
         }
         for (const ev of (evidData ?? [])) {
           const area = ev.area as Area
-          evidenciasMapeadas[area].push({ path: pathFromUrl(ev.url), url: ev.url })
+          evidenciasMapeadas[area].push({ path: pathFromUrl(ev.url), url: ev.url, etiqueta: ev.etiqueta ?? undefined })
         }
 
         store.loadFromDB({
@@ -514,7 +514,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
       if (e6d) throw e6d
       const AREAS: Area[] = ['PRODUCTO', 'SERVICIO', 'LOCAL']
       const evidRows = AREAS.flatMap(area =>
-        store.evidencias[area].map(ev => ({ auditoria_id: aid, area, url: ev.url }))
+        store.evidencias[area].map(ev => ({ auditoria_id: aid, area, url: ev.url, etiqueta: ev.etiqueta ?? null }))
       )
       if (evidRows.length > 0) {
         const { error: e6i } = await supabase.from('au_evidencias').insert(evidRows)

@@ -2,8 +2,9 @@ import { create } from 'zustand'
 import type { Area, Severidad } from '../types'
 
 export interface EvidenciaDraft {
-  path: string  // nombre de archivo en el bucket (uuid.jpg)
-  url:  string  // URL pública para mostrar
+  path:      string           // nombre de archivo en el bucket (uuid.jpg)
+  url:       string           // URL pública para mostrar
+  etiqueta?: string           // etiqueta opcional
 }
 
 export interface ProductoItemDraft {
@@ -108,8 +109,9 @@ interface AuditoriaState {
   updateObservacion: (id: string, patch: Partial<ObservacionDraft>) => void
   removeObservacion: (id: string) => void
   setOportunidad:    (area: Area, texto: string) => void
-  addEvidencia:      (area: Area, ev: EvidenciaDraft) => void
-  removeEvidencia:   (area: Area, path: string) => void
+  addEvidencia:          (area: Area, ev: EvidenciaDraft) => void
+  removeEvidencia:       (area: Area, path: string) => void
+  setEvidenciaEtiqueta:  (area: Area, path: string, etiqueta: string | undefined) => void
   reset:             () => void
   loadFromDB: (data: {
     local_id:             string
@@ -198,6 +200,16 @@ export const useAuditoriaStore = create<AuditoriaState>()((set) => ({
       evidencias: {
         ...s.evidencias,
         [area]: s.evidencias[area].filter((e) => e.path !== path),
+      },
+    })),
+
+  setEvidenciaEtiqueta: (area, path, etiqueta) =>
+    set((s) => ({
+      evidencias: {
+        ...s.evidencias,
+        [area]: s.evidencias[area].map((e) =>
+          e.path === path ? { ...e, etiqueta } : e
+        ),
       },
     })),
 
