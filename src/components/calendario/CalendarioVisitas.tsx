@@ -89,7 +89,7 @@ export default function CalendarioVisitas({
                   <div
                     key={v.id}
                     className={`text-[10px] font-medium px-1 py-0.5 rounded truncate leading-tight ${ESTADO_CHIP[v.estado]}`}
-                    title={`${v.hora ? v.hora.slice(0, 5) + ' · ' : ''}${localesMap[v.local_id] ?? v.local_id}`}
+                    title={`${v.hora ? v.hora.slice(0, 5) + (v.hora_fin ? ` – ${v.hora_fin.slice(0, 5)}` : '') + ' · ' : ''}${localesMap[v.local_id] ?? v.local_id}`}
                   >
                     {v.hora ? v.hora.slice(0, 5) : '·'}{' '}
                     {(localesMap[v.local_id] ?? '–').split(' ').at(-1)}

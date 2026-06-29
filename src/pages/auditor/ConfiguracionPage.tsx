@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import GestionPlatos    from '../../components/config/GestionPlatos'
 import ConfigSeveridad  from '../../components/config/ConfigSeveridad'
+import ConfigTiempos    from '../../components/config/ConfigTiempos'
 
-type Tab = 'platos' | 'severidad'
+type Tab = 'platos' | 'severidad' | 'tiempos'
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'platos',    label: 'Gestión de platos' },
+  { key: 'platos',    label: 'Gestión de platos'  },
   { key: 'severidad', label: 'Pesos de severidad' },
+  { key: 'tiempos',   label: 'Tiempos objetivo'   },
 ]
 
 export default function ConfiguracionPage() {
@@ -48,6 +50,7 @@ export default function ConfiguracionPage() {
           <ConfigSeveridad />
         </div>
       )}
+      {tab === 'tiempos' && <ConfigTiempos />}
     </div>
   )
 }

@@ -78,9 +78,9 @@ export interface AuAuditoriaProductoItem {
   plato_nombre:       string
   ingrediente_nombre: string
   cumple:             boolean        // solo auditorías antiguas
-  contiene:           boolean | null
-  limpieza:           boolean | null
-  peso_adecuado:      boolean | null
+  contiene:           boolean
+  limpieza:           boolean
+  peso_adecuado:      boolean
 }
 
 export type TipoTiempo = 'ENTRANTE' | 'PRINCIPAL' | 'BEBIDA' | 'POSTRE'
@@ -137,12 +137,20 @@ export interface AuConfigSeveridad {
   descuento: number
 }
 
+export interface AuEvidencia {
+  id:           string
+  auditoria_id: string
+  area:         Area
+  url:          string
+}
+
 export interface AuVisita {
   id:          string
   local_id:    string
   auditor_cut: string
   fecha:       string
   hora:        string | null
+  hora_fin:    string | null
   estado:      EstadoVisita
   notas:       string | null
 }

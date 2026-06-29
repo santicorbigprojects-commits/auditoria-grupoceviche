@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { supabase } from '../../lib/supabase'
 import type { AuLocal, AuMarca } from '../../types'
+import ImportarCSV from './ImportarCSV'
 
 /* ── Tipos locales ──────────────────────────────────────────────────────── */
 
@@ -40,10 +41,11 @@ export default function GestionPlatos() {
   const [locales,    setLocales]    = useState<AuLocal[]>([])
   const [marcas,     setMarcas]     = useState<AuMarca[]>([])
   const [draft,      setDraft]      = useState<PlatoDraft | null>(null)
-  const [loading,    setLoading]    = useState(true)
-  const [saving,     setSaving]     = useState(false)
-  const [error,      setError]      = useState<string | null>(null)
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [loading,      setLoading]      = useState(true)
+  const [saving,       setSaving]       = useState(false)
+  const [error,        setError]        = useState<string | null>(null)
+  const [successMsg,   setSuccessMsg]   = useState<string | null>(null)
+  const [showImportar, setShowImportar] = useState(false)
 
   useEffect(() => { loadAll() }, [])
 
@@ -250,13 +252,27 @@ export default function GestionPlatos() {
         <button
           type="button"
           onClick={nuevoPlato}
-          className="w-full mb-3 py-2 rounded-xl border-2 border-dashed border-naranja/40 text-naranja
+          className="w-full mb-2 py-2 rounded-xl border-2 border-dashed border-naranja/40 text-naranja
                      text-sm font-semibold hover:bg-naranja/5 transition flex items-center justify-center gap-1.5"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
           Nuevo plato
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowImportar(true)}
+          className="w-full mb-3 py-2 rounded-xl border border-navy/15 text-navy/50
+                     text-sm font-medium hover:border-naranja/40 hover:text-naranja hover:bg-naranja/5
+                     transition flex items-center justify-center gap-1.5"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Importar CSV
         </button>
 
         {platos.length === 0 && (
@@ -469,6 +485,14 @@ export default function GestionPlatos() {
           </div>
         </form>
       )}
+
+      <ImportarCSV
+        open={showImportar}
+        onClose={() => setShowImportar(false)}
+        onImportado={loadAll}
+        locales={locales}
+        marcas={marcas}
+      />
     </div>
   )
 }

@@ -8,7 +8,7 @@ import {
   calcularNotaLocal,
   calcularNotaTotal,
 } from '../../lib/calculo'
-import type { AuMarca, AuLocal, AuConfigSeveridad, AuConfigTiempos, Severidad } from '../../types'
+import type { AuMarca, AuLocal, AuConfigSeveridad, AuConfigTiempos, Severidad, Area } from '../../types'
 import SeccionProducto, { type PlatoConIngredientes } from '../../components/auditoria/SeccionProducto'
 import SeccionServicio from '../../components/auditoria/SeccionServicio'
 import SeccionLocal from '../../components/auditoria/SeccionLocal'
@@ -203,10 +203,10 @@ export default function TrackingPage() {
             plato_id:           i.plato_id,
             plato_nombre:       i.plato_nombre,
             ingrediente_nombre: i.ingrediente_nombre,
-            cumple:             i.contiene && i.limpieza && i.peso_adecuado, // retrocompat
-            contiene:           i.contiene,
-            limpieza:           i.limpieza,
-            peso_adecuado:      i.peso_adecuado,
+            cumple:             !!i.contiene && !!i.limpieza && !!i.peso_adecuado,
+            contiene:           !!i.contiene,
+            limpieza:           !!i.limpieza,
+            peso_adecuado:      !!i.peso_adecuado,
           }))
         )
         if (e2) throw e2
@@ -235,6 +235,16 @@ export default function TrackingPage() {
           }))
         )
         if (e5) throw e5
+      }
+
+      // 6. Evidencias (batch)
+      const AREAS: Area[] = ['PRODUCTO', 'SERVICIO', 'LOCAL']
+      const evidRows = AREAS.flatMap(area =>
+        store.evidencias[area].map(ev => ({ auditoria_id: aid, area, url: ev.url }))
+      )
+      if (evidRows.length > 0) {
+        const { error: e6 } = await supabase.from('au_evidencias').insert(evidRows)
+        if (e6) throw e6
       }
 
       store.reset()

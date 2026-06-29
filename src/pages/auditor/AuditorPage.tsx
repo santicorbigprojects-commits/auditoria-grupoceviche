@@ -3,8 +3,9 @@ import SidebarLayout, { type NavItem } from '../../components/ui/SidebarLayout'
 import TrackingPage      from './TrackingPage'
 import CalendarioPage    from './CalendarioPage'
 import ConfiguracionPage from './ConfiguracionPage'
+import MisAuditoriasPage from './MisAuditoriasPage'
 
-type Tab = 'tracking' | 'calendario' | 'config'
+type Tab = 'tracking' | 'historial' | 'calendario' | 'config'
 
 export default function AuditorPage() {
   const [tab, setTab] = useState<Tab>('tracking')
@@ -15,6 +16,12 @@ export default function AuditorPage() {
       icon:    <IconTracking />,
       onClick: () => setTab('tracking'),
       active:  tab === 'tracking',
+    },
+    {
+      label:   'Mis auditorías',
+      icon:    <IconHistorial />,
+      onClick: () => setTab('historial'),
+      active:  tab === 'historial',
     },
     {
       label:   'Calendario',
@@ -32,7 +39,8 @@ export default function AuditorPage() {
 
   return (
     <SidebarLayout navItems={navItems}>
-      {tab === 'tracking'   && <TrackingPage />}
+      {tab === 'tracking'  && <TrackingPage />}
+      {tab === 'historial' && <MisAuditoriasPage />}
       {tab === 'calendario' && <CalendarioPage />}
       {tab === 'config'     && <ConfiguracionPage />}
     </SidebarLayout>
@@ -44,6 +52,15 @@ function IconTracking() {
     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round"
         d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    </svg>
+  )
+}
+
+function IconHistorial() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   )
 }

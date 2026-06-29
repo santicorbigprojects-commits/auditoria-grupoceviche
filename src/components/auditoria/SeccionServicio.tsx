@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useAuditoriaStore, type ServicioDraft } from '../../store/auditoriaStore'
 import ObservacionesEditor from './ObservacionesEditor'
+import EvidenciasUploader from './EvidenciasUploader'
 
 type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
 
@@ -135,6 +136,8 @@ export default function SeccionServicio({ tiemposMax }: Props) {
                      focus:outline-none focus:ring-2 focus:ring-ambar/30 focus:border-ambar transition"
         />
       </div>
+
+      <EvidenciasUploader area="SERVICIO" />
     </div>
   )
 }

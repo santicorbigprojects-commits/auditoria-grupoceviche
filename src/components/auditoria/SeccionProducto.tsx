@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { AuPlato, AuPlatoIngrediente } from '../../types'
 import { useAuditoriaStore, type ProductoItemDraft } from '../../store/auditoriaStore'
 import ObservacionesEditor from './ObservacionesEditor'
+import EvidenciasUploader from './EvidenciasUploader'
 
 export interface PlatoConIngredientes extends AuPlato {
   ingredientes: AuPlatoIngrediente[]
@@ -23,6 +24,17 @@ const CHECKS: { campo: CheckCampo; label: string }[] = [
 
 export default function SeccionProducto({ platos, platosSeleccionados, onTogglePlato }: Props) {
   const { productoItems, toggleCheck, oportunidad_producto, setOportunidad } = useAuditoriaStore()
+  const [busqueda, setBusqueda] = useState('')
+
+  const platosVisibles = busqueda.trim()
+    ? platos.filter(p => {
+        const q = busqueda.toLowerCase()
+        return (
+          p.nombre.toLowerCase().includes(q) ||
+          (p.codigo ?? '').toLowerCase().includes(q)
+        )
+      })
+    : platos
 
   return (
     <Card titulo="Producto" dot="bg-naranja" border="border-naranja/30" bg="bg-naranja/5">
@@ -37,26 +49,65 @@ export default function SeccionProducto({ platos, platosSeleccionados, onToggleP
             <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide mb-2">
               Platos a evaluar
             </p>
-            <div className="flex flex-wrap gap-2">
-              {platos.map(p => {
-                const sel = platosSeleccionados.has(p.id)
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => onTogglePlato(p.id, p)}
-                    className={`text-sm px-3 py-1.5 rounded-xl border font-medium transition ${
-                      sel
-                        ? 'bg-naranja text-white border-naranja'
-                        : 'bg-white text-navy/60 border-navy/20 hover:border-naranja hover:text-naranja'
-                    }`}
-                  >
-                    {p.nombre}
-                    {p.codigo && <span className="ml-1 text-xs opacity-60">{p.codigo}</span>}
-                  </button>
-                )
-              })}
+
+            {/* Buscador */}
+            <div className="relative mb-3">
+              <svg
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-navy/30 pointer-events-none"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="search"
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre o código…"
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-navy/15 bg-white text-sm
+                           text-navy placeholder:text-navy/25 focus:outline-none focus:ring-2
+                           focus:ring-naranja/30 focus:border-naranja transition"
+              />
+              {busqueda && (
+                <button
+                  type="button"
+                  onClick={() => setBusqueda('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-navy/30 hover:text-navy/60 transition"
+                  aria-label="Limpiar búsqueda"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
+
+            {platosVisibles.length === 0 ? (
+              <p className="text-sm text-navy/30 italic py-1">
+                Sin platos que coincidan con &ldquo;{busqueda}&rdquo;.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {platosVisibles.map(p => {
+                  const sel = platosSeleccionados.has(p.id)
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => onTogglePlato(p.id, p)}
+                      className={`text-sm px-3 py-1.5 rounded-xl border font-medium transition ${
+                        sel
+                          ? 'bg-naranja text-white border-naranja'
+                          : 'bg-white text-navy/60 border-navy/20 hover:border-naranja hover:text-naranja'
+                      }`}
+                    >
+                      {p.nombre}
+                      {p.codigo && <span className="ml-1 text-xs opacity-60">{p.codigo}</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {/* Ingredientes por plato seleccionado */}
@@ -150,6 +201,8 @@ export default function SeccionProducto({ platos, platosSeleccionados, onToggleP
                      focus:outline-none focus:ring-2 focus:ring-naranja/30 focus:border-naranja transition"
         />
       </div>
+
+      <EvidenciasUploader area="PRODUCTO" />
     </Card>
   )
 }

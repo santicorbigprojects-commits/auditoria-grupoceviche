@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import type { Area, Severidad } from '../types'
 
+export interface EvidenciaDraft {
+  path: string  // nombre de archivo en el bucket (uuid.jpg)
+  url:  string  // URL pública para mostrar
+}
+
 export interface ProductoItemDraft {
   plato_id:           string
   plato_nombre:       string
@@ -73,6 +78,12 @@ const LOCAL_INICIAL: LocalDraft = {
   limp_barras:      false,
 }
 
+const EVIDENCIAS_INICIAL: Record<Area, EvidenciaDraft[]> = {
+  PRODUCTO: [],
+  SERVICIO: [],
+  LOCAL:    [],
+}
+
 interface AuditoriaState {
   local_id:             string | null
   fecha:                string
@@ -84,6 +95,7 @@ interface AuditoriaState {
   oportunidad_producto: string
   oportunidad_servicio: string
   oportunidad_local:    string
+  evidencias:           Record<Area, EvidenciaDraft[]>
 
   setLocalId:        (id: string) => void
   setFecha:          (fecha: string) => void
@@ -96,7 +108,22 @@ interface AuditoriaState {
   updateObservacion: (id: string, patch: Partial<ObservacionDraft>) => void
   removeObservacion: (id: string) => void
   setOportunidad:    (area: Area, texto: string) => void
+  addEvidencia:      (area: Area, ev: EvidenciaDraft) => void
+  removeEvidencia:   (area: Area, path: string) => void
   reset:             () => void
+  loadFromDB: (data: {
+    local_id:             string
+    fecha:                string
+    mesero_nombre:        string
+    productoItems:        ProductoItemDraft[]
+    servicio:             ServicioDraft
+    localChecklist:       LocalDraft
+    observaciones:        ObservacionDraft[]
+    oportunidad_producto: string
+    oportunidad_servicio: string
+    oportunidad_local:    string
+    evidencias:           Record<Area, EvidenciaDraft[]>
+  }) => void
 }
 
 const hoy = () => new Date().toISOString().slice(0, 10)
@@ -112,6 +139,7 @@ export const useAuditoriaStore = create<AuditoriaState>()((set) => ({
   oportunidad_producto: '',
   oportunidad_servicio: '',
   oportunidad_local:    '',
+  evidencias:           { ...EVIDENCIAS_INICIAL, PRODUCTO: [], SERVICIO: [], LOCAL: [] },
 
   setLocalId:      (id)     => set({ local_id: id }),
   setFecha:        (fecha)  => set({ fecha }),
@@ -157,6 +185,22 @@ export const useAuditoriaStore = create<AuditoriaState>()((set) => ({
       ? { oportunidad_servicio: texto }
       : { oportunidad_local: texto }),
 
+  addEvidencia: (area, ev) =>
+    set((s) => ({
+      evidencias: {
+        ...s.evidencias,
+        [area]: [...s.evidencias[area], ev],
+      },
+    })),
+
+  removeEvidencia: (area, path) =>
+    set((s) => ({
+      evidencias: {
+        ...s.evidencias,
+        [area]: s.evidencias[area].filter((e) => e.path !== path),
+      },
+    })),
+
   reset: () =>
     set({
       local_id:             null,
@@ -169,5 +213,8 @@ export const useAuditoriaStore = create<AuditoriaState>()((set) => ({
       oportunidad_producto: '',
       oportunidad_servicio: '',
       oportunidad_local:    '',
+      evidencias:           { PRODUCTO: [], SERVICIO: [], LOCAL: [] },
     }),
+
+  loadFromDB: (data) => set(data),
 }))

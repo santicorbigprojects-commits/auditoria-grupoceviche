@@ -1,5 +1,6 @@
 import { useAuditoriaStore, type LocalDraft } from '../../store/auditoriaStore'
 import ObservacionesEditor from './ObservacionesEditor'
+import EvidenciasUploader from './EvidenciasUploader'
 
 export default function SeccionLocal() {
   const { localChecklist, setLocalChecklist, oportunidad_local, setOportunidad } = useAuditoriaStore()
@@ -43,6 +44,8 @@ export default function SeccionLocal() {
                      focus:outline-none focus:ring-2 focus:ring-navy/20 focus:border-navy/40 transition"
         />
       </div>
+
+      <EvidenciasUploader area="LOCAL" />
     </div>
   )
 }
