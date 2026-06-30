@@ -46,6 +46,8 @@ export default function GestionPlatos() {
   const [error,        setError]        = useState<string | null>(null)
   const [successMsg,   setSuccessMsg]   = useState<string | null>(null)
   const [showImportar, setShowImportar] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ plato: PlatoRow; usedCount: number } | null>(null)
+  const [deleting,      setDeleting]      = useState(false)
 
   useEffect(() => { loadAll() }, [])
 
@@ -217,6 +219,33 @@ export default function GestionPlatos() {
     await supabase.from('au_platos').update({ activo: !row.activo }).eq('id', row.id)
     if (draft?.id === row.id) setDraft(d => d ? { ...d, activo: !row.activo } : d)
     await loadAll()
+  }
+
+  async function handleIniciarEliminar(row: PlatoRow) {
+    setError(null); setSuccessMsg(null)
+    const { count } = await supabase
+      .from('au_auditoria_producto_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('plato_id', row.id)
+    setDeleteConfirm({ plato: row, usedCount: count ?? 0 })
+  }
+
+  async function handleConfirmarEliminar() {
+    if (!deleteConfirm) return
+    setDeleting(true)
+    try {
+      const { error: err } = await supabase.from('au_platos').delete().eq('id', deleteConfirm.plato.id)
+      if (err) throw err
+      if (draft?.id === deleteConfirm.plato.id) setDraft(null)
+      setDeleteConfirm(null)
+      await loadAll()
+      setSuccessMsg('Plato eliminado correctamente.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al eliminar')
+      setDeleteConfirm(null)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   /* ── Grupos de locales para checkboxes ─────────────────────────────── */
@@ -450,39 +479,101 @@ export default function GestionPlatos() {
           {error      && <p className="text-sm text-terranova bg-terranova/10 rounded-xl px-4 py-2.5">{error}</p>}
           {successMsg && <p className="text-sm text-green-700 bg-green-50 rounded-xl px-4 py-2.5">{successMsg}</p>}
 
-          {/* Acciones */}
-          <div className="flex items-center gap-3 flex-wrap pt-1">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2.5 rounded-xl bg-naranja text-white text-sm font-semibold
-                         hover:bg-terranova disabled:opacity-40 transition"
-            >
-              {saving ? 'Guardando…' : draft.id === null ? 'Crear plato' : 'Guardar cambios'}
-            </button>
+          {/* Confirmación de eliminación */}
+          {deleteConfirm && (
+            <div className={`rounded-xl border-2 p-4 ${
+              deleteConfirm.usedCount > 0
+                ? 'bg-terranova/5 border-terranova/30'
+                : 'bg-navy/5 border-navy/20'
+            }`}>
+              {deleteConfirm.usedCount > 0 ? (
+                <>
+                  <p className="text-sm font-semibold text-terranova mb-1">Advertencia</p>
+                  <p className="text-sm text-navy/70 mb-3">
+                    Este plato fue usado en <strong>{deleteConfirm.usedCount}</strong>{' '}
+                    {deleteConfirm.usedCount === 1 ? 'auditoría' : 'auditorías'}.
+                    Si lo eliminas, se perderá el detalle de producto de{' '}
+                    {deleteConfirm.usedCount === 1 ? 'esa auditoría' : 'esas auditorías'}.
+                    ¿Continuar?
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-navy/70 mb-3">
+                  ¿Eliminar el plato <strong>{deleteConfirm.plato.nombre}</strong>? Esta acción no se puede deshacer.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleConfirmarEliminar}
+                  disabled={deleting}
+                  className="px-4 py-2 rounded-xl bg-terranova text-white text-sm font-semibold
+                             hover:opacity-90 disabled:opacity-40 transition"
+                >
+                  {deleting ? 'Eliminando…' : 'Sí, eliminar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm(null)}
+                  disabled={deleting}
+                  className="px-4 py-2 rounded-xl border border-navy/20 text-sm text-navy/55
+                             hover:bg-navy/5 transition"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
 
-            {draft.id !== null && (
+          {/* Acciones */}
+          {!deleteConfirm && (
+            <div className="flex items-center gap-3 flex-wrap pt-1">
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-6 py-2.5 rounded-xl bg-naranja text-white text-sm font-semibold
+                           hover:bg-terranova disabled:opacity-40 transition"
+              >
+                {saving ? 'Guardando…' : draft.id === null ? 'Crear plato' : 'Guardar cambios'}
+              </button>
+
+              {draft.id !== null && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const row = platos.find(p => p.id === draft.id)
+                      if (row) handleToggleActivo(row)
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-navy/20 text-sm font-medium text-navy/55
+                               hover:bg-navy/5 transition"
+                  >
+                    {draft.activo ? 'Desactivar' : 'Reactivar'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const row = platos.find(p => p.id === draft.id)
+                      if (row) handleIniciarEliminar(row)
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-terranova/30 text-sm font-medium
+                               text-terranova hover:bg-terranova/5 transition"
+                  >
+                    Eliminar
+                  </button>
+                </>
+              )}
+
               <button
                 type="button"
-                onClick={() => {
-                  const row = platos.find(p => p.id === draft.id)
-                  if (row) handleToggleActivo(row)
-                }}
-                className="px-4 py-2.5 rounded-xl border border-navy/20 text-sm font-medium text-navy/55
-                           hover:bg-navy/5 transition"
+                onClick={() => { setDraft(null); setError(null); setSuccessMsg(null) }}
+                className="px-4 py-2.5 rounded-xl text-sm text-navy/35 hover:text-navy transition"
               >
-                {draft.activo ? 'Desactivar' : 'Reactivar'}
+                Cancelar
               </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => { setDraft(null); setError(null); setSuccessMsg(null) }}
-              className="px-4 py-2.5 rounded-xl text-sm text-navy/35 hover:text-navy transition"
-            >
-              Cancelar
-            </button>
-          </div>
+            </div>
+          )}
         </form>
       )}
 

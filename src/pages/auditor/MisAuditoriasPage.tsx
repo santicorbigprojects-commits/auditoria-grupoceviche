@@ -283,14 +283,12 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
 
         const productoItems: ProductoItemDraft[] = (itemsData ?? []).map((i: {
           plato_id: string; plato_nombre: string; ingrediente_nombre: string;
-          contiene: boolean | null; limpieza: boolean | null; peso_adecuado: boolean | null
+          contiene: boolean | null;
         }) => ({
           plato_id:           i.plato_id,
           plato_nombre:       i.plato_nombre,
           ingrediente_nombre: i.ingrediente_nombre,
-          contiene:           i.contiene    ?? false,
-          limpieza:           i.limpieza    ?? false,
-          peso_adecuado:      i.peso_adecuado ?? false,
+          contiene:           i.contiene ?? false,
         }))
 
         const servicio: ServicioDraft = {
@@ -418,8 +416,6 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           plato_nombre:       plato.nombre,
           ingrediente_nombre: ing.nombre,
           contiene:           false,
-          limpieza:           false,
-          peso_adecuado:      false,
         }))
       store.setProductoItems([...store.productoItems, ...nuevos])
     }
@@ -470,10 +466,10 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
             plato_id:           i.plato_id,
             plato_nombre:       i.plato_nombre,
             ingrediente_nombre: i.ingrediente_nombre,
-            cumple:             !!i.contiene && !!i.limpieza && !!i.peso_adecuado,
+            cumple:             !!i.contiene,
             contiene:           !!i.contiene,
-            limpieza:           !!i.limpieza,
-            peso_adecuado:      !!i.peso_adecuado,
+            limpieza:           false,
+            peso_adecuado:      false,
           }))
         )
         if (e2i) throw e2i

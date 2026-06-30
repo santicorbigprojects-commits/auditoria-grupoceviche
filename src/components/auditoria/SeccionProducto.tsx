@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import type { AuPlato, AuPlatoIngrediente } from '../../types'
-import { useAuditoriaStore, type ProductoItemDraft } from '../../store/auditoriaStore'
+import { useAuditoriaStore } from '../../store/auditoriaStore'
 import ObservacionesEditor from './ObservacionesEditor'
 import EvidenciasUploader from './EvidenciasUploader'
 
@@ -13,14 +13,6 @@ interface Props {
   platosSeleccionados: Set<string>
   onTogglePlato:       (platoId: string, plato: PlatoConIngredientes) => void
 }
-
-type CheckCampo = 'contiene' | 'limpieza' | 'peso_adecuado'
-
-const CHECKS: { campo: CheckCampo; label: string }[] = [
-  { campo: 'contiene',      label: 'Contiene' },
-  { campo: 'limpieza',      label: 'Limpieza' },
-  { campo: 'peso_adecuado', label: 'Peso adecuado' },
-]
 
 export default function SeccionProducto({ platos, platosSeleccionados, onTogglePlato }: Props) {
   const { productoItems, toggleCheck, oportunidad_producto, setOportunidad } = useAuditoriaStore()
@@ -115,9 +107,8 @@ export default function SeccionProducto({ platos, platosSeleccionados, onToggleP
             .filter(p => platosSeleccionados.has(p.id))
             .map(plato => {
               const items   = productoItems.filter(i => i.plato_id === plato.id)
-              const marcadas = items.reduce((s, i) =>
-                s + (i.contiene ? 1 : 0) + (i.limpieza ? 1 : 0) + (i.peso_adecuado ? 1 : 0), 0)
-              const total = items.length * 3
+              const marcadas = items.reduce((s, i) => s + (i.contiene ? 1 : 0), 0)
+              const total = items.length
 
               return (
                 <div key={plato.id} className="mb-5">
@@ -140,40 +131,28 @@ export default function SeccionProducto({ platos, platosSeleccionados, onToggleP
                       {plato.ingredientes.map(ing => {
                         const item = items.find(i => i.ingrediente_nombre === ing.nombre)
                         return (
-                          <div
+                          <button
                             key={ing.id}
-                            className="px-3 py-2.5 rounded-xl bg-white border border-navy/10"
+                            type="button"
+                            onClick={() => toggleCheck(plato.id, ing.nombre)}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition ${
+                              item?.contiene
+                                ? 'bg-green-50 border-green-200 text-green-800'
+                                : 'bg-white border-navy/15 text-navy/60 hover:border-navy/30'
+                            }`}
                           >
-                            <p className="text-xs font-semibold text-navy mb-2">{ing.nombre}</p>
-                            <div className="grid grid-cols-3 gap-2">
-                              {CHECKS.map(({ campo, label }) => {
-                                const val = (item?.[campo as keyof ProductoItemDraft] ?? false) as boolean
-                                return (
-                                  <button
-                                    key={campo}
-                                    type="button"
-                                    onClick={() => toggleCheck(plato.id, ing.nombre, campo)}
-                                    className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-xs text-center border transition ${
-                                      val
-                                        ? 'bg-green-50 border-green-200 text-green-800'
-                                        : 'bg-white border-navy/15 text-navy/50 hover:border-navy/30'
-                                    }`}
-                                  >
-                                    <span className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                      val ? 'bg-green-500 text-white' : 'border-2 border-navy/20'
-                                    }`}>
-                                      {val && (
-                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                      )}
-                                    </span>
-                                    {label}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
+                            <span className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
+                              item?.contiene ? 'bg-green-500 text-white' : 'border-2 border-navy/20'
+                            }`}>
+                              {item?.contiene && (
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </span>
+                            <span className="text-xs font-semibold">{ing.nombre}</span>
+                            <span className="ml-auto text-xs font-medium opacity-60">Contiene</span>
+                          </button>
                         )
                       })}
                     </div>

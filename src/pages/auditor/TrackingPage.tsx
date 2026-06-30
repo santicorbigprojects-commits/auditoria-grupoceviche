@@ -145,8 +145,6 @@ export default function TrackingPage() {
           plato_nombre:       plato.nombre,
           ingrediente_nombre: ing.nombre,
           contiene:           false,
-          limpieza:           false,
-          peso_adecuado:      false,
         }))
       store.setProductoItems([...store.productoItems, ...nuevos])
     }
@@ -203,10 +201,10 @@ export default function TrackingPage() {
             plato_id:           i.plato_id,
             plato_nombre:       i.plato_nombre,
             ingrediente_nombre: i.ingrediente_nombre,
-            cumple:             !!i.contiene && !!i.limpieza && !!i.peso_adecuado,
+            cumple:             !!i.contiene,
             contiene:           !!i.contiene,
-            limpieza:           !!i.limpieza,
-            peso_adecuado:      !!i.peso_adecuado,
+            limpieza:           false,
+            peso_adecuado:      false,
           }))
         )
         if (e2) throw e2

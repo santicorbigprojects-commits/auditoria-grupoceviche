@@ -202,12 +202,7 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
                           <div className="space-y-2">
                             {g.rows.map((item, idx) => (
                               <div key={idx} className="px-3 py-2.5 rounded-xl bg-white border border-navy/10">
-                                <p className="text-xs font-semibold text-navy mb-2">{item.ingrediente_nombre}</p>
-                                <div className="grid grid-cols-3 gap-2">
-                                  <CheckGrid label="Contiene"      val={item.contiene} />
-                                  <CheckGrid label="Limpieza"      val={item.limpieza} />
-                                  <CheckGrid label="Peso adecuado" val={item.peso_adecuado} />
-                                </div>
+                                <CheckRow label={item.ingrediente_nombre} val={item.contiene} />
                               </div>
                             ))}
                           </div>
@@ -344,25 +339,6 @@ function GrupoCheck({ titulo, children }: { titulo: string; children: React.Reac
   )
 }
 
-function CheckGrid({ label, val }: { label: string; val: boolean | null }) {
-  const ok = !!val
-  return (
-    <div className={`flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-xs text-center border ${
-      ok ? 'bg-green-50 border-green-200 text-green-800' : 'bg-white border-navy/15 text-navy/40'
-    }`}>
-      <span className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-        ok ? 'bg-green-500 text-white' : 'border-2 border-navy/20'
-      }`}>
-        {ok && (
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-        )}
-      </span>
-      {label}
-    </div>
-  )
-}
 
 function CheckRow({ label, val }: { label: string; val: boolean | null }) {
   const ok = !!val
