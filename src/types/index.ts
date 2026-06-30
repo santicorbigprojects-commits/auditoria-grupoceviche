@@ -81,6 +81,8 @@ export interface AuAuditoriaProductoItem {
   contiene:           boolean
   limpieza:           boolean
   peso_adecuado:      boolean
+  combo_nombre:       string | null  // null = plato suelto
+  slot_nombre:        string | null  // null = plato suelto
 }
 
 export type TipoTiempo = 'ENTRANTE' | 'PRINCIPAL' | 'BEBIDA' | 'POSTRE'
@@ -154,4 +156,30 @@ export interface AuVisita {
   hora_fin:    string | null
   estado:      EstadoVisita
   notas:       string | null
+}
+
+export interface AuCombo {
+  id:     string
+  nombre: string
+  codigo: string | null
+  activo: boolean
+}
+
+export interface AuComboSlot {
+  id:       string
+  combo_id: string
+  nombre:   string
+  orden:    number
+}
+
+export interface AuComboSlotOpcion {
+  id:       string
+  slot_id:  string
+  plato_id: string
+}
+
+export interface AuComboLocal {
+  id:       string
+  combo_id: string
+  local_id: string
 }

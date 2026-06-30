@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import GestionPlatos    from '../../components/config/GestionPlatos'
+import GestionCombos    from '../../components/config/GestionCombos'
 import ConfigSeveridad  from '../../components/config/ConfigSeveridad'
 import ConfigTiempos    from '../../components/config/ConfigTiempos'
 
-type Tab = 'platos' | 'severidad' | 'tiempos'
+type Tab = 'platos' | 'combos' | 'severidad' | 'tiempos'
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'platos',    label: 'Gestión de platos'  },
+  { key: 'platos',    label: 'Platos'            },
+  { key: 'combos',    label: 'Combos'            },
   { key: 'severidad', label: 'Pesos de severidad' },
   { key: 'tiempos',   label: 'Tiempos objetivo'   },
 ]
@@ -23,7 +25,7 @@ export default function ConfiguracionPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-navy/5 rounded-xl p-1 w-fit">
+      <div className="flex flex-wrap gap-1 mb-6 bg-navy/5 rounded-xl p-1 w-fit">
         {TABS.map(t => (
           <button
             key={t.key}
@@ -42,6 +44,7 @@ export default function ConfiguracionPage() {
 
       {/* Contenido */}
       {tab === 'platos'    && <GestionPlatos />}
+      {tab === 'combos'    && <GestionCombos />}
       {tab === 'severidad' && (
         <div className="bg-white rounded-2xl border border-navy/10 shadow-sm p-6">
           <h3 className="text-base font-bold text-navy mb-1" style={{ fontFamily: 'Poppins, sans-serif' }}>
