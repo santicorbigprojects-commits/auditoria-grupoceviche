@@ -32,6 +32,8 @@ import SeccionProducto, {
 import SeccionServicio from '../../components/auditoria/SeccionServicio'
 import SeccionLocal from '../../components/auditoria/SeccionLocal'
 import PanelNotas from '../../components/auditoria/PanelNotas'
+import ConfirmModal from '../../components/ui/ConfirmModal'
+import { eliminarAuditoria } from '../../lib/eliminarAuditoria'
 
 type Vista = 'lista' | 'editando'
 type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
@@ -86,37 +88,58 @@ function ListaAuditorias({ onEditar }: ListaProps) {
   const [localesMap,  setLocalesMap]  = useState<Record<string, string>>({})
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState<string | null>(null)
+  const [aEliminar,   setAEliminar]   = useState<AuAuditoria | null>(null)
+  const [eliminando,  setEliminando]  = useState(false)
+  const [errorEliminar, setErrorEliminar] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    setError(null)
+    try {
+      const [{ data: auds, error: e1 }, { data: locs, error: e2 }] = await Promise.all([
+        supabase
+          .from('au_auditorias')
+          .select('*')
+          .eq('auditor_cut', cut!)
+          .order('fecha', { ascending: false })
+          .order('creado_en', { ascending: false })
+          .range(0, 9999),
+        supabase.from('au_locales').select('id, nombre'),
+      ])
+      if (e1) throw e1
+      if (e2) throw e2
+      setAuditorias(auds ?? [])
+      const map: Record<string, string> = {}
+      ;(locs ?? []).forEach((l: { id: string; nombre: string }) => { map[l.id] = l.nombre })
+      setLocalesMap(map)
+    } catch (err) {
+      console.error(err)
+      setError('Error cargando historial. Intenta de nuevo.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const [{ data: auds, error: e1 }, { data: locs, error: e2 }] = await Promise.all([
-          supabase
-            .from('au_auditorias')
-            .select('*')
-            .eq('auditor_cut', cut!)
-            .order('fecha', { ascending: false })
-            .order('creado_en', { ascending: false })
-            .range(0, 9999),
-          supabase.from('au_locales').select('id, nombre'),
-        ])
-        if (e1) throw e1
-        if (e2) throw e2
-        setAuditorias(auds ?? [])
-        const map: Record<string, string> = {}
-        ;(locs ?? []).forEach((l: { id: string; nombre: string }) => { map[l.id] = l.nombre })
-        setLocalesMap(map)
-      } catch (err) {
-        console.error(err)
-        setError('Error cargando historial. Intenta de nuevo.')
-      } finally {
-        setLoading(false)
-      }
-    }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cut])
+
+  async function handleEliminar() {
+    if (!aEliminar) return
+    setEliminando(true)
+    setErrorEliminar(null)
+    try {
+      await eliminarAuditoria(aEliminar.id)
+      setAEliminar(null)
+      await load()
+    } catch (err) {
+      console.error(err)
+      setErrorEliminar('Error al eliminar la auditoría. Intenta de nuevo.')
+    } finally {
+      setEliminando(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -166,11 +189,23 @@ function ListaAuditorias({ onEditar }: ListaProps) {
                   auditoria={a}
                   localNombre={localesMap[a.local_id] ?? '—'}
                   onEditar={() => onEditar(a, localesMap[a.local_id] ?? '—')}
+                  onEliminar={() => setAEliminar(a)}
                 />
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {aEliminar && (
+        <ConfirmModal
+          titulo="Eliminar auditoría"
+          mensaje="Esto eliminará la auditoría y sus fotos de forma permanente. ¿Continuar?"
+          confirmando={eliminando}
+          error={errorEliminar}
+          onConfirm={handleEliminar}
+          onCancel={() => { setAEliminar(null); setErrorEliminar(null) }}
+        />
       )}
     </div>
   )
@@ -180,7 +215,8 @@ function FilaAuditoria({
   auditoria: a,
   localNombre,
   onEditar,
-}: { auditoria: AuAuditoria; localNombre: string; onEditar: () => void }) {
+  onEliminar,
+}: { auditoria: AuAuditoria; localNombre: string; onEditar: () => void; onEliminar: () => void }) {
   const total = a.nota_total ?? 0
 
   const fechaLabel = (() => {
@@ -216,14 +252,24 @@ function FilaAuditoria({
         )}
       </td>
       <td className="px-4 py-3.5">
-        <button
-          type="button"
-          onClick={onEditar}
-          className="text-xs px-3 py-1.5 rounded-lg border border-navy/20 text-navy/55
-                     hover:border-naranja hover:text-naranja transition font-medium whitespace-nowrap"
-        >
-          Editar
-        </button>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onEditar}
+            className="text-xs px-3 py-1.5 rounded-lg border border-navy/20 text-navy/55
+                       hover:border-naranja hover:text-naranja transition font-medium whitespace-nowrap"
+          >
+            Editar
+          </button>
+          <button
+            type="button"
+            onClick={onEliminar}
+            className="text-xs px-3 py-1.5 rounded-lg border border-navy/20 text-navy/55
+                       hover:border-terranova hover:text-terranova transition font-medium whitespace-nowrap"
+          >
+            Eliminar
+          </button>
+        </div>
       </td>
     </tr>
   )

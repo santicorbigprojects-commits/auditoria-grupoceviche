@@ -471,7 +471,7 @@ function OportRO({ texto }: { texto: string | null }) {
   return (
     <div className="mt-4 pt-4 border-t border-navy/10">
       <p className="text-xs font-semibold text-navy/40 uppercase tracking-wide mb-2">
-        Oportunidades de mejora
+        Comentarios
       </p>
       <p className="text-sm text-navy/60 leading-relaxed whitespace-pre-wrap">{texto}</p>
     </div>

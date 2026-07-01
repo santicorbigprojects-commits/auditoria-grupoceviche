@@ -121,15 +121,15 @@ export default function SeccionServicio({ tiemposMax }: Props) {
 
       <ObservacionesEditor area="SERVICIO" />
 
-      {/* Oportunidades de mejora — texto libre, no puntúa */}
+      {/* Comentarios — texto libre, no puntúa */}
       <div className="mt-4 pt-4 border-t border-navy/10">
         <p className="text-xs font-semibold text-navy/40 uppercase tracking-wide mb-2">
-          Oportunidades de mejora
+          Comentarios
         </p>
         <textarea
           value={oportunidad_servicio}
           onChange={e => setOportunidad('SERVICIO', e.target.value)}
-          placeholder="Notas y oportunidades de mejora para Servicio…"
+          placeholder="Comentarios para Servicio…"
           rows={2}
           className="w-full text-sm px-3 py-2 rounded-xl border border-navy/15 bg-white resize-none
                      text-navy placeholder:text-navy/25

@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 import type { AuLocal, AuMarca, AuAuditoria, AuObservacion } from '../../types'
 import DetalleAuditoria from '../../components/director/DetalleAuditoria'
+import ConfirmModal from '../../components/ui/ConfirmModal'
+import { eliminarAuditoria } from '../../lib/eliminarAuditoria'
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 function semColor(nota: number) {
@@ -29,6 +31,10 @@ export default function DirectorPage() {
   const [loadingDet, setLoadingDet] = useState(false)
 
   const [detalleAud, setDetalleAud] = useState<AuAuditoria | null>(null)
+
+  const [aEliminar,     setAEliminar]     = useState<AuAuditoria | null>(null)
+  const [eliminando,    setEliminando]    = useState(false)
+  const [errorEliminar, setErrorEliminar] = useState<string | null>(null)
 
   /* ── Carga inicial ─────────────────────────────────────────────────── */
   useEffect(() => {
@@ -83,42 +89,60 @@ export default function DirectorPage() {
   }, [cut, rol])
 
   /* ── Carga historial del local seleccionado ────────────────────────── */
-  useEffect(() => {
-    if (!selLocalId) return
+  async function loadDetail(localId: string) {
     setLoadingDet(true)
 
-    async function loadDetail() {
-      const { data: auds } = await supabase
-        .from('au_auditorias')
+    const { data: auds } = await supabase
+      .from('au_auditorias')
+      .select('*')
+      .eq('local_id', localId)
+      .order('fecha', { ascending: false })
+      .range(0, 9999)
+
+    const list = auds ?? []
+    setAuditorias(list)
+
+    if (list.length > 0) {
+      const { data: obs } = await supabase
+        .from('au_observaciones')
         .select('*')
-        .eq('local_id', selLocalId)
-        .order('fecha', { ascending: false })
+        .in('auditoria_id', list.map(a => a.id))
         .range(0, 9999)
 
-      const list = auds ?? []
-      setAuditorias(list)
-
-      if (list.length > 0) {
-        const { data: obs } = await supabase
-          .from('au_observaciones')
-          .select('*')
-          .in('auditoria_id', list.map(a => a.id))
-          .range(0, 9999)
-
-        const grouped: Record<string, AuObservacion[]> = {}
-        for (const o of (obs ?? [])) {
-          if (!grouped[o.auditoria_id]) grouped[o.auditoria_id] = []
-          grouped[o.auditoria_id].push(o)
-        }
-        setObsMap(grouped)
-      } else {
-        setObsMap({})
+      const grouped: Record<string, AuObservacion[]> = {}
+      for (const o of (obs ?? [])) {
+        if (!grouped[o.auditoria_id]) grouped[o.auditoria_id] = []
+        grouped[o.auditoria_id].push(o)
       }
-
-      setLoadingDet(false)
+      setObsMap(grouped)
+    } else {
+      setObsMap({})
     }
-    loadDetail()
+
+    setLoadingDet(false)
+  }
+
+  useEffect(() => {
+    if (!selLocalId) return
+    loadDetail(selLocalId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selLocalId])
+
+  async function handleEliminar() {
+    if (!aEliminar) return
+    setEliminando(true)
+    setErrorEliminar(null)
+    try {
+      await eliminarAuditoria(aEliminar.id)
+      setAEliminar(null)
+      if (selLocalId) await loadDetail(selLocalId)
+    } catch (err) {
+      console.error(err)
+      setErrorEliminar('Error al eliminar la auditoría. Intenta de nuevo.')
+    } finally {
+      setEliminando(false)
+    }
+  }
 
   /* ── Derivados ─────────────────────────────────────────────────────── */
   const marcaMap: Record<string, string> = Object.fromEntries(marcas.map(m => [m.id, m.nombre]))
@@ -300,15 +324,27 @@ export default function DirectorPage() {
                             <span className="text-xs font-normal opacity-60">/20</span>
                           </span>
 
-                          {/* Ver detalle */}
-                          <button
-                            type="button"
-                            onClick={() => setDetalleAud(a)}
-                            className="text-xs px-3 py-1.5 rounded-lg border border-navy/20 text-navy/55
-                                       hover:border-naranja hover:text-naranja transition font-medium whitespace-nowrap"
-                          >
-                            Ver detalle
-                          </button>
+                          {/* Ver detalle / Eliminar */}
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setDetalleAud(a)}
+                              className="text-xs px-3 py-1.5 rounded-lg border border-navy/20 text-navy/55
+                                         hover:border-naranja hover:text-naranja transition font-medium whitespace-nowrap"
+                            >
+                              Ver detalle
+                            </button>
+                            {rol === 'ADMIN' && (
+                              <button
+                                type="button"
+                                onClick={() => setAEliminar(a)}
+                                className="text-xs px-3 py-1.5 rounded-lg border border-navy/20 text-navy/55
+                                           hover:border-terranova hover:text-terranova transition font-medium whitespace-nowrap"
+                              >
+                                Eliminar
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )
                     })}
@@ -327,6 +363,18 @@ export default function DirectorPage() {
           localNombre={selLocal?.nombre ?? ''}
           obs={obsMap[detalleAud.id] ?? []}
           onClose={() => setDetalleAud(null)}
+        />
+      )}
+
+      {/* Modal confirmar eliminación (solo ADMIN) */}
+      {aEliminar && (
+        <ConfirmModal
+          titulo="Eliminar auditoría"
+          mensaje="Esto eliminará la auditoría y sus fotos de forma permanente. ¿Continuar?"
+          confirmando={eliminando}
+          error={errorEliminar}
+          onConfirm={handleEliminar}
+          onCancel={() => { setAEliminar(null); setErrorEliminar(null) }}
         />
       )}
     </SidebarLayout>
