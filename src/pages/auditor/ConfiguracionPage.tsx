@@ -3,14 +3,16 @@ import GestionPlatos    from '../../components/config/GestionPlatos'
 import GestionCombos    from '../../components/config/GestionCombos'
 import ConfigSeveridad  from '../../components/config/ConfigSeveridad'
 import ConfigTiempos    from '../../components/config/ConfigTiempos'
+import ConfigRI         from '../../components/config/ConfigRI'
 
-type Tab = 'platos' | 'combos' | 'severidad' | 'tiempos'
+type Tab = 'platos' | 'combos' | 'severidad' | 'tiempos' | 'revision_interna'
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'platos',    label: 'Platos'            },
-  { key: 'combos',    label: 'Combos'            },
-  { key: 'severidad', label: 'Pesos de severidad' },
-  { key: 'tiempos',   label: 'Tiempos objetivo'   },
+  { key: 'platos',           label: 'Platos'             },
+  { key: 'combos',           label: 'Combos'             },
+  { key: 'severidad',        label: 'Pesos de severidad' },
+  { key: 'tiempos',          label: 'Tiempos objetivo'   },
+  { key: 'revision_interna', label: 'Revisión Interna'   },
 ]
 
 export default function ConfiguracionPage() {
@@ -54,6 +56,14 @@ export default function ConfiguracionPage() {
         </div>
       )}
       {tab === 'tiempos' && <ConfigTiempos />}
+      {tab === 'revision_interna' && (
+        <div className="bg-white rounded-2xl border border-navy/10 shadow-sm p-6">
+          <h3 className="text-base font-bold text-navy mb-1" style={{ fontFamily: 'Poppins, sans-serif' }}>
+            Topes de descuento — Revisión Interna
+          </h3>
+          <ConfigRI />
+        </div>
+      )}
     </div>
   )
 }

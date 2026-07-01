@@ -14,14 +14,20 @@ import {
   calcularNotaServicio,
   calcularNotaLocal,
   calcularNotaTotal,
+  calcularDescuentoRevisionInterna,
+  type ObservacionCalculo,
+  type ObservacionRI,
+  type ConfigRI,
 } from '../../lib/calculo'
 import type {
   AuAuditoria,
   AuCombo,
   AuPlato,
   AuConfigSeveridad,
+  AuConfigRI,
   AuConfigTiempos,
   Area,
+  AspectoRI,
   Severidad,
 } from '../../types'
 import SeccionProducto, {
@@ -31,9 +37,16 @@ import SeccionProducto, {
 } from '../../components/auditoria/SeccionProducto'
 import SeccionServicio from '../../components/auditoria/SeccionServicio'
 import SeccionLocal from '../../components/auditoria/SeccionLocal'
+import SeccionRevisionInterna from '../../components/auditoria/SeccionRevisionInterna'
 import PanelNotas from '../../components/auditoria/PanelNotas'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { eliminarAuditoria } from '../../lib/eliminarAuditoria'
+
+const CONFIG_RI_DEFAULT: ConfigRI = { RI_REVISION: 2, RI_ROTULACION: 2, RI_HIGIENE: 3 }
+
+function esAreaPrincipal(area: Area | AspectoRI): area is Area {
+  return area === 'PRODUCTO' || area === 'SERVICIO' || area === 'LOCAL'
+}
 
 type Vista = 'lista' | 'editando'
 type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
@@ -298,6 +311,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
   const [slotPlatoElegido,    setSlotPlatoElegido]    = useState<Map<string, string>>(new Map())
   const [tiemposMax,          setTiemposMax]          = useState<Record<TimeKey, number>>({ ...TIEMPOS_DEFAULT })
   const [configSev,           setConfigSev]           = useState<AuConfigSeveridad[]>([])
+  const [configRI,            setConfigRI]            = useState<ConfigRI>(CONFIG_RI_DEFAULT)
 
   const [guardando,    setGuardando]    = useState(false)
   const [guardadoOk,   setGuardadoOk]   = useState(false)
@@ -319,6 +333,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           { data: obsData   },
           { data: evidData  },
           { data: sevData   },
+          { data: riData    },
           platosResult,
           combosResult,
           tiemposResult,
@@ -329,12 +344,18 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           supabase.from('au_observaciones').select('*').eq('auditoria_id', aid).range(0, 9999),
           supabase.from('au_evidencias').select('*').eq('auditoria_id', aid).range(0, 9999),
           supabase.from('au_config_severidad').select('*'),
+          supabase.from('au_config_ri').select('*'),
           cargarPlatos(lid),
           cargarCombos(lid),
           cargarTiempos(lid),
         ])
 
         if (sevData) setConfigSev(sevData)
+        if (riData) {
+          const merged = { ...CONFIG_RI_DEFAULT }
+          ;(riData as AuConfigRI[]).forEach(r => { merged[r.aspecto] = r.max_descuento })
+          setConfigRI(merged)
+        }
         setPlatos(platosResult)
         setCombos(combosResult)
         setTiemposMax(tiemposResult)
@@ -380,19 +401,20 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
         }
 
         const observaciones: ObservacionDraft[] = (obsData ?? []).map((o: {
-          id: string; area: string; texto: string; severidad: string
+          id: string; area: string; texto: string; severidad: string; extrema_modo: string | null
         }) => ({
-          id:        o.id,
-          area:      o.area      as Area,
-          texto:     o.texto,
-          severidad: o.severidad as Severidad,
+          id:           o.id,
+          area:         o.area      as Area | AspectoRI,
+          texto:        o.texto,
+          severidad:    o.severidad as Severidad,
+          extrema_modo: o.extrema_modo as ObservacionDraft['extrema_modo'],
         }))
 
-        const evidenciasMapeadas: Record<Area, EvidenciaDraft[]> = {
-          PRODUCTO: [], SERVICIO: [], LOCAL: [],
+        const evidenciasMapeadas: Record<Area | 'REVISION_INTERNA', EvidenciaDraft[]> = {
+          PRODUCTO: [], SERVICIO: [], LOCAL: [], REVISION_INTERNA: [],
         }
         for (const ev of (evidData ?? [])) {
-          const area = ev.area as Area
+          const area = ev.area as Area | 'REVISION_INTERNA'
           evidenciasMapeadas[area].push({ path: pathFromUrl(ev.url), url: ev.url, etiqueta: ev.etiqueta ?? undefined })
         }
 
@@ -408,6 +430,16 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           oportunidad_servicio: auditoria.oportunidad_servicio ?? '',
           oportunidad_local:    auditoria.oportunidad_local    ?? '',
           evidencias:           evidenciasMapeadas,
+          riConforme: {
+            RI_REVISION:   auditoria.ri_revision_conforme   ?? false,
+            RI_ROTULACION: auditoria.ri_rotulacion_conforme ?? false,
+            RI_HIGIENE:    auditoria.ri_higiene_conforme    ?? false,
+          },
+          riComentario: {
+            RI_REVISION:   auditoria.ri_revision_comentario   ?? '',
+            RI_ROTULACION: auditoria.ri_rotulacion_comentario ?? '',
+            RI_HIGIENE:    auditoria.ri_higiene_comentario    ?? '',
+          },
         })
 
         // Solo platos sueltos (sin slot) para platosSeleccionados
@@ -593,11 +625,20 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
     return m as Record<Severidad, number>
   })()
 
+  /* ── Observaciones: separar áreas 1-3 de los aspectos de Revisión Interna ── */
+  const obsPrincipales: ObservacionCalculo[] = store.observaciones
+    .filter(o => esAreaPrincipal(o.area))
+    .map(o => ({ area: o.area as Area, severidad: o.severidad, extrema_modo: o.extrema_modo }))
+  const obsRI: ObservacionRI[] = store.observaciones
+    .filter(o => !esAreaPrincipal(o.area))
+    .map(o => ({ aspecto: o.area as AspectoRI, severidad: o.severidad }))
+
   /* ── Notas en vivo ────────────────────────────────────────────────────── */
-  const notaP = calcularNotaProducto(store.productoItems, store.observaciones, cfgMap)
-  const notaS = calcularNotaServicio(store.servicio,      store.observaciones, cfgMap)
-  const notaL = calcularNotaLocal(store.localChecklist,   store.observaciones, cfgMap)
-  const notaT = calcularNotaTotal(notaP, notaS, notaL)
+  const notaP = calcularNotaProducto(store.productoItems, obsPrincipales, cfgMap)
+  const notaS = calcularNotaServicio(store.servicio,      obsPrincipales, cfgMap)
+  const notaL = calcularNotaLocal(store.localChecklist,   obsPrincipales, cfgMap)
+  const descuentoRI = calcularDescuentoRevisionInterna(obsRI, configRI, cfgMap)
+  const notaT = calcularNotaTotal(notaP, notaS, notaL, descuentoRI)
 
   /* ── Guardar (UPDATE + delete/insert hijas) ───────────────────────────── */
   async function handleGuardar() {
@@ -617,6 +658,13 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
         oportunidad_producto: store.oportunidad_producto || null,
         oportunidad_servicio: store.oportunidad_servicio || null,
         oportunidad_local:    store.oportunidad_local    || null,
+        ri_revision_conforme:     store.riConforme.RI_REVISION,
+        ri_rotulacion_conforme:   store.riConforme.RI_ROTULACION,
+        ri_higiene_conforme:      store.riConforme.RI_HIGIENE,
+        ri_revision_comentario:   store.riComentario.RI_REVISION   || null,
+        ri_rotulacion_comentario: store.riComentario.RI_ROTULACION || null,
+        ri_higiene_comentario:    store.riComentario.RI_HIGIENE    || null,
+        descuento_ri:         +descuentoRI.toFixed(2),
       }).eq('id', aid)
       if (e1) throw e1
 
@@ -655,7 +703,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
       })
       if (e4) throw e4
 
-      // 5. Observaciones: delete + insert
+      // 5. Observaciones: delete + insert (incluye áreas 1-3 y aspectos de Revisión Interna)
       const { error: e5d } = await supabase.from('au_observaciones').delete().eq('auditoria_id', aid)
       if (e5d) throw e5d
       if (store.observaciones.length > 0) {
@@ -665,17 +713,18 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
             area:         o.area,
             texto:        o.texto,
             severidad:    o.severidad,
+            extrema_modo: o.extrema_modo ?? null,
           }))
         )
         if (e5i) throw e5i
       }
 
-      // 6. Evidencias: delete DB rows + insert current
+      // 6. Evidencias: delete DB rows + insert current (incluye Revisión Interna)
       // (storage add/remove ya fue manejado en tiempo real por EvidenciasUploader)
       const { error: e6d } = await supabase.from('au_evidencias').delete().eq('auditoria_id', aid)
       if (e6d) throw e6d
-      const AREAS: Area[] = ['PRODUCTO', 'SERVICIO', 'LOCAL']
-      const evidRows = AREAS.flatMap(area =>
+      const AREAS_EVIDENCIA: (Area | 'REVISION_INTERNA')[] = ['PRODUCTO', 'SERVICIO', 'LOCAL', 'REVISION_INTERNA']
+      const evidRows = AREAS_EVIDENCIA.flatMap(area =>
         store.evidencias[area].map(ev => ({ auditoria_id: aid, area, url: ev.url, etiqueta: ev.etiqueta ?? null }))
       )
       if (evidRows.length > 0) {
@@ -783,6 +832,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           />
           <SeccionServicio tiemposMax={tiemposMax} />
           <SeccionLocal />
+          <SeccionRevisionInterna />
 
           {errorGuardar && (
             <div className="mt-3 flex items-center gap-2 text-sm text-terranova bg-terranova/10 rounded-xl px-4 py-3">
@@ -801,6 +851,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
             notaP={notaP}
             notaS={notaS}
             notaL={notaL}
+            descuentoRI={descuentoRI}
             notaT={notaT}
             onGuardar={handleGuardar}
             guardando={guardando}

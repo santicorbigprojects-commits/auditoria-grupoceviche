@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuditoriaStore, type EvidenciaDraft } from '../../store/auditoriaStore'
-import type { Area } from '../../types'
+import type { AreaEvidencia } from '../../types'
 
 /* ── Opciones de etiqueta por área ─────────────────────────────────────── */
 
@@ -27,6 +27,12 @@ const ETIQUETAS_LOCAL = [
   'Limpieza sala',
   'Limpieza baños',
   'Limpieza barras',
+]
+
+const ETIQUETAS_REVISION_INTERNA = [
+  'Revisión',
+  'Rotulación',
+  'Higiene de cocina',
 ]
 
 /* ── Compresión de imagen ───────────────────────────────────────────────── */
@@ -60,7 +66,7 @@ async function comprimirImagen(file: File): Promise<Blob> {
 /* ── Componente ─────────────────────────────────────────────────────────── */
 
 interface Props {
-  area: Area
+  area: AreaEvidencia
 }
 
 export default function EvidenciasUploader({ area }: Props) {
@@ -86,7 +92,9 @@ export default function EvidenciasUploader({ area }: Props) {
       ? [...new Set(productoItems.map(i => i.ingrediente_nombre))]
       : area === 'SERVICIO'
       ? ETIQUETAS_SERVICIO
-      : ETIQUETAS_LOCAL
+      : area === 'LOCAL'
+      ? ETIQUETAS_LOCAL
+      : ETIQUETAS_REVISION_INTERNA
 
   const selectorDeshabilitado = area === 'PRODUCTO' && productoItems.length === 0
 

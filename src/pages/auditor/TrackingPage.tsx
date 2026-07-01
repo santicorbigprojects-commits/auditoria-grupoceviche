@@ -7,8 +7,15 @@ import {
   calcularNotaServicio,
   calcularNotaLocal,
   calcularNotaTotal,
+  calcularDescuentoRevisionInterna,
+  type ObservacionCalculo,
+  type ObservacionRI,
+  type ConfigRI,
 } from '../../lib/calculo'
-import type { AuMarca, AuLocal, AuConfigSeveridad, AuConfigTiempos, AuCombo, AuPlato, Severidad, Area } from '../../types'
+import type {
+  AuMarca, AuLocal, AuConfigSeveridad, AuConfigTiempos, AuConfigRI,
+  AuCombo, AuPlato, Severidad, Area, AspectoRI,
+} from '../../types'
 import SeccionProducto, {
   type PlatoConIngredientes,
   type ComboConSlots,
@@ -16,7 +23,14 @@ import SeccionProducto, {
 } from '../../components/auditoria/SeccionProducto'
 import SeccionServicio from '../../components/auditoria/SeccionServicio'
 import SeccionLocal from '../../components/auditoria/SeccionLocal'
+import SeccionRevisionInterna from '../../components/auditoria/SeccionRevisionInterna'
 import PanelNotas from '../../components/auditoria/PanelNotas'
+
+const CONFIG_RI_DEFAULT: ConfigRI = { RI_REVISION: 2, RI_ROTULACION: 2, RI_HIGIENE: 3 }
+
+function esAreaPrincipal(area: Area | AspectoRI): area is Area {
+  return area === 'PRODUCTO' || area === 'SERVICIO' || area === 'LOCAL'
+}
 
 type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
 
@@ -34,6 +48,7 @@ export default function TrackingPage() {
   const [marcas,        setMarcas]        = useState<AuMarca[]>([])
   const [locales,       setLocales]       = useState<AuLocal[]>([])
   const [configSev,     setConfigSev]     = useState<AuConfigSeveridad[]>([])
+  const [configRI,      setConfigRI]      = useState<ConfigRI>(CONFIG_RI_DEFAULT)
   const [loadingMaster, setLoadingMaster] = useState(true)
 
   // Platos y combos del local seleccionado
@@ -58,14 +73,20 @@ export default function TrackingPage() {
   useEffect(() => {
     async function load() {
       setLoadingMaster(true)
-      const [{ data: m }, { data: l }, { data: s }] = await Promise.all([
+      const [{ data: m }, { data: l }, { data: s }, { data: ri }] = await Promise.all([
         supabase.from('au_marcas').select('*').order('es_carpeta', { ascending: false }).order('nombre'),
         supabase.from('au_locales').select('*').eq('activo', true).order('nombre'),
         supabase.from('au_config_severidad').select('*'),
+        supabase.from('au_config_ri').select('*'),
       ])
       if (m) setMarcas(m)
       if (l) setLocales(l)
       if (s) setConfigSev(s)
+      if (ri) {
+        const merged = { ...CONFIG_RI_DEFAULT }
+        ;(ri as AuConfigRI[]).forEach(r => { merged[r.aspecto] = r.max_descuento })
+        setConfigRI(merged)
+      }
       setLoadingMaster(false)
     }
     load()
@@ -239,11 +260,20 @@ export default function TrackingPage() {
     return m as Record<Severidad, number>
   })()
 
+  /* ── Observaciones: separar áreas 1-3 de los aspectos de Revisión Interna ── */
+  const obsPrincipales: ObservacionCalculo[] = store.observaciones
+    .filter(o => esAreaPrincipal(o.area))
+    .map(o => ({ area: o.area as Area, severidad: o.severidad, extrema_modo: o.extrema_modo }))
+  const obsRI: ObservacionRI[] = store.observaciones
+    .filter(o => !esAreaPrincipal(o.area))
+    .map(o => ({ aspecto: o.area as AspectoRI, severidad: o.severidad }))
+
   /* ── Notas en vivo ──────────────────────────────────────────────────── */
-  const notaP = calcularNotaProducto(store.productoItems, store.observaciones, cfgMap)
-  const notaS = calcularNotaServicio(store.servicio,      store.observaciones, cfgMap)
-  const notaL = calcularNotaLocal(store.localChecklist,   store.observaciones, cfgMap)
-  const notaT = calcularNotaTotal(notaP, notaS, notaL)
+  const notaP = calcularNotaProducto(store.productoItems, obsPrincipales, cfgMap)
+  const notaS = calcularNotaServicio(store.servicio,      obsPrincipales, cfgMap)
+  const notaL = calcularNotaLocal(store.localChecklist,   obsPrincipales, cfgMap)
+  const descuentoRI = calcularDescuentoRevisionInterna(obsRI, configRI, cfgMap)
+  const notaT = calcularNotaTotal(notaP, notaS, notaL, descuentoRI)
 
   /* ── Guardar ────────────────────────────────────────────────────────── */
   async function handleGuardar() {
@@ -267,6 +297,13 @@ export default function TrackingPage() {
           oportunidad_producto: store.oportunidad_producto || null,
           oportunidad_servicio: store.oportunidad_servicio || null,
           oportunidad_local:    store.oportunidad_local    || null,
+          ri_revision_conforme:     store.riConforme.RI_REVISION,
+          ri_rotulacion_conforme:   store.riConforme.RI_ROTULACION,
+          ri_higiene_conforme:      store.riConforme.RI_HIGIENE,
+          ri_revision_comentario:   store.riComentario.RI_REVISION   || null,
+          ri_rotulacion_comentario: store.riComentario.RI_ROTULACION || null,
+          ri_higiene_comentario:    store.riComentario.RI_HIGIENE    || null,
+          descuento_ri:         +descuentoRI.toFixed(2),
         })
         .select('id')
         .single()
@@ -305,7 +342,7 @@ export default function TrackingPage() {
       })
       if (e4) throw e4
 
-      // 5. Observaciones (batch)
+      // 5. Observaciones (batch) — incluye áreas 1-3 y aspectos de Revisión Interna
       if (store.observaciones.length > 0) {
         const { error: e5 } = await supabase.from('au_observaciones').insert(
           store.observaciones.map(o => ({
@@ -313,14 +350,15 @@ export default function TrackingPage() {
             area:         o.area,
             texto:        o.texto,
             severidad:    o.severidad,
+            extrema_modo: o.extrema_modo ?? null,
           }))
         )
         if (e5) throw e5
       }
 
-      // 6. Evidencias (batch)
-      const AREAS: Area[] = ['PRODUCTO', 'SERVICIO', 'LOCAL']
-      const evidRows = AREAS.flatMap(area =>
+      // 6. Evidencias (batch) — incluye Revisión Interna
+      const AREAS_EVIDENCIA: (Area | 'REVISION_INTERNA')[] = ['PRODUCTO', 'SERVICIO', 'LOCAL', 'REVISION_INTERNA']
+      const evidRows = AREAS_EVIDENCIA.flatMap(area =>
         store.evidencias[area].map(ev => ({ auditoria_id: aid, area, url: ev.url, etiqueta: ev.etiqueta ?? null }))
       )
       if (evidRows.length > 0) {
@@ -458,6 +496,7 @@ export default function TrackingPage() {
                 />
                 <SeccionServicio tiemposMax={tiemposMax} />
                 <SeccionLocal />
+                <SeccionRevisionInterna />
               </>
             )
           )}
@@ -478,6 +517,7 @@ export default function TrackingPage() {
           notaP={notaP}
           notaS={notaS}
           notaL={notaL}
+          descuentoRI={descuentoRI}
           notaT={notaT}
           onGuardar={handleGuardar}
           guardando={guardando}

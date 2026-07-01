@@ -1,26 +1,26 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import type { Severidad } from '../../types'
+import type { AspectoRI, AuConfigRI } from '../../types'
 
-const FILAS: { key: Severidad; label: string; desc: string }[] = [
-  { key: 'NINGUNA', label: 'Ninguna',            desc: 'Sin descuento (informativa)' },
-  { key: 'LEVE',    label: 'Leve',               desc: 'Descuento menor' },
-  { key: 'MEDIA',   label: 'Media',              desc: 'Descuento moderado' },
-  { key: 'GRAVE',   label: 'Grave',              desc: 'Descuento alto' },
-  { key: 'EXTREMA', label: 'Extremadamente grave', desc: 'Peso fijo (o reduce 50% del área en Producto/Servicio/Local)' },
+const FILAS: { key: AspectoRI; label: string; desc: string }[] = [
+  { key: 'RI_REVISION',   label: 'Revisión de productos',   desc: 'Tope de descuento para este aspecto' },
+  { key: 'RI_ROTULACION', label: 'Rotulación de productos', desc: 'Tope de descuento para este aspecto' },
+  { key: 'RI_HIGIENE',    label: 'Higiene de cocina',       desc: 'Tope de descuento para este aspecto' },
 ]
 
-export default function ConfigSeveridad() {
-  const [vals,   setVals]   = useState<Record<Severidad, number>>({ NINGUNA: 0, LEVE: 0.25, MEDIA: 0.5, GRAVE: 1, EXTREMA: 2 })
+const DEFAULTS: Record<AspectoRI, number> = { RI_REVISION: 2, RI_ROTULACION: 2, RI_HIGIENE: 3 }
+
+export default function ConfigRI() {
+  const [vals,   setVals]   = useState<Record<AspectoRI, number>>({ ...DEFAULTS })
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
   const [error,  setError]  = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.from('au_config_severidad').select('*').then(({ data }) => {
+    supabase.from('au_config_ri').select('*').then(({ data }) => {
       if (data) {
-        const m: Partial<Record<Severidad, number>> = {}
-        data.forEach(r => { m[r.severidad as Severidad] = r.descuento })
+        const m: Partial<Record<AspectoRI, number>> = {}
+        ;(data as AuConfigRI[]).forEach(r => { m[r.aspecto] = r.max_descuento })
         setVals(v => ({ ...v, ...m }))
       }
     })
@@ -28,10 +28,10 @@ export default function ConfigSeveridad() {
 
   async function handleSave() {
     setSaving(true); setError(null); setSaved(false)
-    const rows = FILAS.map(f => ({ severidad: f.key, descuento: vals[f.key] }))
+    const rows = FILAS.map(f => ({ aspecto: f.key, max_descuento: vals[f.key] }))
     const { error: e } = await supabase
-      .from('au_config_severidad')
-      .upsert(rows, { onConflict: 'severidad' })
+      .from('au_config_ri')
+      .upsert(rows, { onConflict: 'aspecto' })
     setSaving(false)
     if (e) { setError(e.message); return }
     setSaved(true)
@@ -41,22 +41,22 @@ export default function ConfigSeveridad() {
   return (
     <div className="max-w-lg">
       <p className="text-xs text-navy/50 mb-5">
-        Puntos que se descuentan a la nota del área por cada observación según su severidad.
-        El descuento es acumulativo y el piso es 0.
+        Descuento máximo que puede restar cada aspecto de Revisión Interna, sin importar cuántas
+        observaciones tenga. El total restado por Revisión Interna se resta directo del total, no del área.
       </p>
 
       <div className="space-y-3 mb-6">
         {FILAS.map(f => (
           <div key={f.key} className="flex items-center gap-4">
-            <div className="w-40">
+            <div className="w-48">
               <p className="text-sm font-semibold text-navy">{f.label}</p>
               <p className="text-xs text-navy/40">{f.desc}</p>
             </div>
             <input
               type="number"
               min={0}
-              max={6.67}
-              step={0.05}
+              max={20}
+              step={0.5}
               value={vals[f.key]}
               onChange={e => {
                 const n = parseFloat(e.target.value)
@@ -79,7 +79,7 @@ export default function ConfigSeveridad() {
         className="px-5 py-2 rounded-xl bg-navy text-white text-sm font-semibold
                    hover:bg-marron disabled:opacity-40 transition"
       >
-        {saving ? 'Guardando…' : saved ? '✓ Guardado' : 'Guardar pesos'}
+        {saving ? 'Guardando…' : saved ? '✓ Guardado' : 'Guardar topes'}
       </button>
     </div>
   )

@@ -1,7 +1,19 @@
 export type Rol           = 'AUDITOR' | 'DIRECTOR' | 'ADMIN'
 export type Area          = 'PRODUCTO' | 'SERVICIO' | 'LOCAL'
-export type Severidad     = 'NINGUNA' | 'LEVE' | 'MEDIA' | 'GRAVE'
+export type Severidad     = 'NINGUNA' | 'LEVE' | 'MEDIA' | 'GRAVE' | 'EXTREMA'
 export type EstadoVisita  = 'PROGRAMADA' | 'REALIZADA' | 'CANCELADA'
+
+/** Modo de descuento cuando severidad = 'EXTREMA', solo elegible en áreas Producto/Servicio/Local. */
+export type ExtremaModo   = 'PESO' | 'PORCENTAJE'
+
+/** Los 3 aspectos del apartado 4 — Revisión Interna. */
+export type AspectoRI     = 'RI_REVISION' | 'RI_ROTULACION' | 'RI_HIGIENE'
+
+/** au_observaciones.area admite las áreas 1-3 y los 3 aspectos de Revisión Interna. */
+export type AreaObservacion = Area | AspectoRI
+
+/** au_evidencias.area admite las áreas 1-3 y 'REVISION_INTERNA' (una sola, con etiqueta por aspecto). */
+export type AreaEvidencia   = Area | 'REVISION_INTERNA'
 
 export interface AuUsuario {
   cut:    string
@@ -68,6 +80,13 @@ export interface AuAuditoria {
   oportunidad_producto: string | null
   oportunidad_servicio: string | null
   oportunidad_local:    string | null
+  ri_revision_conforme:     boolean | null
+  ri_rotulacion_conforme:   boolean | null
+  ri_higiene_conforme:      boolean | null
+  ri_revision_comentario:   string | null
+  ri_rotulacion_comentario: string | null
+  ri_higiene_comentario:    string | null
+  descuento_ri:         number | null
   creado_en:            string
 }
 
@@ -129,9 +148,10 @@ export interface AuAuditoriaLocal {
 export interface AuObservacion {
   id:           string
   auditoria_id: string
-  area:         Area
+  area:         AreaObservacion
   texto:        string
   severidad:    Severidad
+  extrema_modo: ExtremaModo | null
 }
 
 export interface AuConfigSeveridad {
@@ -139,10 +159,15 @@ export interface AuConfigSeveridad {
   descuento: number
 }
 
+export interface AuConfigRI {
+  aspecto:       AspectoRI
+  max_descuento: number
+}
+
 export interface AuEvidencia {
   id:           string
   auditoria_id: string
-  area:         Area
+  area:         AreaEvidencia
   url:          string
   etiqueta:     string | null
 }

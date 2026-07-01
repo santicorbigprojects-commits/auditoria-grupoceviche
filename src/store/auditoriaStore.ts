@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Area, Severidad } from '../types'
+import type { Area, Severidad, ExtremaModo, AspectoRI, AreaEvidencia } from '../types'
 
 export interface EvidenciaDraft {
   path:      string           // nombre de archivo en el bucket (uuid.jpg)
@@ -17,10 +17,11 @@ export interface ProductoItemDraft {
 }
 
 export interface ObservacionDraft {
-  id:        string   // UUID local para key de lista
-  area:      Area
-  texto:     string
-  severidad: Severidad
+  id:            string   // UUID local para key de lista
+  area:          Area | AspectoRI
+  texto:         string
+  severidad:     Severidad
+  extrema_modo?: ExtremaModo | null   // solo aplica en áreas 1-3 con severidad EXTREMA
 }
 
 export interface ServicioDraft {
@@ -79,10 +80,23 @@ const LOCAL_INICIAL: LocalDraft = {
   limp_barras:      false,
 }
 
-const EVIDENCIAS_INICIAL: Record<Area, EvidenciaDraft[]> = {
-  PRODUCTO: [],
-  SERVICIO: [],
-  LOCAL:    [],
+const EVIDENCIAS_INICIAL: Record<AreaEvidencia, EvidenciaDraft[]> = {
+  PRODUCTO:         [],
+  SERVICIO:         [],
+  LOCAL:            [],
+  REVISION_INTERNA: [],
+}
+
+const RI_CONFORME_INICIAL: Record<AspectoRI, boolean> = {
+  RI_REVISION:   false,
+  RI_ROTULACION: false,
+  RI_HIGIENE:    false,
+}
+
+const RI_COMENTARIO_INICIAL: Record<AspectoRI, string> = {
+  RI_REVISION:   '',
+  RI_ROTULACION: '',
+  RI_HIGIENE:    '',
 }
 
 interface AuditoriaState {
@@ -96,7 +110,9 @@ interface AuditoriaState {
   oportunidad_producto: string
   oportunidad_servicio: string
   oportunidad_local:    string
-  evidencias:           Record<Area, EvidenciaDraft[]>
+  evidencias:           Record<AreaEvidencia, EvidenciaDraft[]>
+  riConforme:           Record<AspectoRI, boolean>
+  riComentario:         Record<AspectoRI, string>
 
   setLocalId:        (id: string) => void
   setFecha:          (fecha: string) => void
@@ -109,9 +125,11 @@ interface AuditoriaState {
   updateObservacion: (id: string, patch: Partial<ObservacionDraft>) => void
   removeObservacion: (id: string) => void
   setOportunidad:    (area: Area, texto: string) => void
-  addEvidencia:          (area: Area, ev: EvidenciaDraft) => void
-  removeEvidencia:       (area: Area, path: string) => void
-  setEvidenciaEtiqueta:  (area: Area, path: string, etiqueta: string | undefined) => void
+  addEvidencia:          (area: AreaEvidencia, ev: EvidenciaDraft) => void
+  removeEvidencia:       (area: AreaEvidencia, path: string) => void
+  setEvidenciaEtiqueta:  (area: AreaEvidencia, path: string, etiqueta: string | undefined) => void
+  setRiConforme:     (aspecto: AspectoRI, val: boolean) => void
+  setRiComentario:   (aspecto: AspectoRI, texto: string) => void
   reset:             () => void
   loadFromDB: (data: {
     local_id:             string
@@ -124,7 +142,9 @@ interface AuditoriaState {
     oportunidad_producto: string
     oportunidad_servicio: string
     oportunidad_local:    string
-    evidencias:           Record<Area, EvidenciaDraft[]>
+    evidencias:           Record<AreaEvidencia, EvidenciaDraft[]>
+    riConforme?:          Record<AspectoRI, boolean>
+    riComentario?:        Record<AspectoRI, string>
   }) => void
 }
 
@@ -141,7 +161,9 @@ export const useAuditoriaStore = create<AuditoriaState>()((set) => ({
   oportunidad_producto: '',
   oportunidad_servicio: '',
   oportunidad_local:    '',
-  evidencias:           { ...EVIDENCIAS_INICIAL, PRODUCTO: [], SERVICIO: [], LOCAL: [] },
+  evidencias:           { ...EVIDENCIAS_INICIAL, PRODUCTO: [], SERVICIO: [], LOCAL: [], REVISION_INTERNA: [] },
+  riConforme:           { ...RI_CONFORME_INICIAL },
+  riComentario:         { ...RI_COMENTARIO_INICIAL },
 
   setLocalId:      (id)     => set({ local_id: id }),
   setFecha:        (fecha)  => set({ fecha }),
@@ -215,6 +237,12 @@ export const useAuditoriaStore = create<AuditoriaState>()((set) => ({
       },
     })),
 
+  setRiConforme: (aspecto, val) =>
+    set((s) => ({ riConforme: { ...s.riConforme, [aspecto]: val } })),
+
+  setRiComentario: (aspecto, texto) =>
+    set((s) => ({ riComentario: { ...s.riComentario, [aspecto]: texto } })),
+
   reset: () =>
     set({
       local_id:             null,
@@ -227,7 +255,9 @@ export const useAuditoriaStore = create<AuditoriaState>()((set) => ({
       oportunidad_producto: '',
       oportunidad_servicio: '',
       oportunidad_local:    '',
-      evidencias:           { PRODUCTO: [], SERVICIO: [], LOCAL: [] },
+      evidencias:           { PRODUCTO: [], SERVICIO: [], LOCAL: [], REVISION_INTERNA: [] },
+      riConforme:           { ...RI_CONFORME_INICIAL },
+      riComentario:         { ...RI_COMENTARIO_INICIAL },
     }),
 
   loadFromDB: (data) => set(data),

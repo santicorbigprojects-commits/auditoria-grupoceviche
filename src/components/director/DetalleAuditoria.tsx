@@ -8,9 +8,20 @@ import type {
   AuObservacion,
   AuEvidencia,
   AuConfigTiempos,
+  AuConfigSeveridad,
+  AuConfigRI,
   Area,
+  AspectoRI,
   Severidad,
 } from '../../types'
+import {
+  calcularDescuentoRevisionInternaPorAspecto,
+  huboReduccion50PorExtrema,
+  type ObservacionCalculo,
+  type ObservacionRI,
+  type ConfigRI,
+  type ConfigSeveridad,
+} from '../../lib/calculo'
 
 type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
 
@@ -18,11 +29,27 @@ const TIEMPOS_DEFAULT: Record<TimeKey, number> = {
   entrante: 10, principal: 20, bebida: 5, postre: 10,
 }
 
+const CONFIG_SEV_DEFAULT: ConfigSeveridad = {
+  NINGUNA: 0, LEVE: 0.25, MEDIA: 0.50, GRAVE: 1.00, EXTREMA: 2.00,
+}
+const CONFIG_RI_DEFAULT: ConfigRI = { RI_REVISION: 2, RI_ROTULACION: 2, RI_HIGIENE: 3 }
+
+const ASPECTO_TITULO: Record<AspectoRI, string> = {
+  RI_REVISION:   'Revisión de productos',
+  RI_ROTULACION: 'Rotulación de productos',
+  RI_HIGIENE:    'Higiene de cocina',
+}
+
+function esAreaPrincipal(area: Area | AspectoRI): area is Area {
+  return area === 'PRODUCTO' || area === 'SERVICIO' || area === 'LOCAL'
+}
+
 const SEV_BADGE: Record<Severidad, string> = {
   NINGUNA: 'bg-navy/10 text-navy/40',
   LEVE:    'bg-ambar/15 text-ambar',
   MEDIA:   'bg-naranja/15 text-naranja',
   GRAVE:   'bg-terranova/10 text-terranova',
+  EXTREMA: 'bg-marron/15 text-marron',
 }
 
 function semColor(nota: number) {
@@ -51,6 +78,8 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
   const [localData,  setLocalData]  = useState<AuAuditoriaLocal | null>(null)
   const [evidencias, setEvidencias] = useState<AuEvidencia[]>([])
   const [tiemposMax, setTiemposMax] = useState<Record<TimeKey, number>>({ ...TIEMPOS_DEFAULT })
+  const [configSev,  setConfigSev]  = useState<ConfigSeveridad>(CONFIG_SEV_DEFAULT)
+  const [configRI,   setConfigRI]   = useState<ConfigRI>(CONFIG_RI_DEFAULT)
   const [lightbox,   setLightbox]   = useState<string | null>(null)
 
   /* ── Carga ─────────────────────────────────────────────────────────── */
@@ -65,12 +94,16 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
         { data: servData  },
         { data: locData   },
         { data: evidData  },
+        { data: sevData   },
+        { data: riData    },
         tiemposResult,
       ] = await Promise.all([
         supabase.from('au_auditoria_producto_items').select('*').eq('auditoria_id', aid).range(0, 9999),
         supabase.from('au_auditoria_servicio').select('*').eq('auditoria_id', aid).maybeSingle(),
         supabase.from('au_auditoria_local').select('*').eq('auditoria_id', aid).maybeSingle(),
         supabase.from('au_evidencias').select('*').eq('auditoria_id', aid).range(0, 9999),
+        supabase.from('au_config_severidad').select('*'),
+        supabase.from('au_config_ri').select('*'),
         loadTiempos(lid),
       ])
 
@@ -78,6 +111,16 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
       setServicio(servData)
       setLocalData(locData)
       setEvidencias(evidData ?? [])
+      if (sevData) {
+        const merged = { ...CONFIG_SEV_DEFAULT }
+        ;(sevData as AuConfigSeveridad[]).forEach(r => { merged[r.severidad] = r.descuento })
+        setConfigSev(merged)
+      }
+      if (riData) {
+        const merged = { ...CONFIG_RI_DEFAULT }
+        ;(riData as AuConfigRI[]).forEach(r => { merged[r.aspecto] = r.max_descuento })
+        setConfigRI(merged)
+      }
       setTiemposMax(tiemposResult)
       setLoading(false)
     }
@@ -144,8 +187,30 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
     return map
   })()
 
-  const evidByArea = (area: Area) => evidencias.filter(e => e.area === area)
-  const obsByArea  = (area: Area) => obs.filter(o => o.area === area)
+  const evidByArea = (area: Area | 'REVISION_INTERNA') => evidencias.filter(e => e.area === area)
+  const obsByArea  = (area: Area | AspectoRI) => obs.filter(o => o.area === area)
+
+  // Separar observaciones de áreas 1-3 de las de Revisión Interna, para el desglose
+  const obsPrincipalesCalc: ObservacionCalculo[] = obs
+    .filter(o => esAreaPrincipal(o.area))
+    .map(o => ({ area: o.area as Area, severidad: o.severidad, extrema_modo: o.extrema_modo }))
+  const obsRICalc: ObservacionRI[] = obs
+    .filter(o => !esAreaPrincipal(o.area))
+    .map(o => ({ aspecto: o.area as AspectoRI, severidad: o.severidad }))
+
+  const reduccion50 = {
+    PRODUCTO: huboReduccion50PorExtrema(obsPrincipalesCalc, 'PRODUCTO'),
+    SERVICIO: huboReduccion50PorExtrema(obsPrincipalesCalc, 'SERVICIO'),
+    LOCAL:    huboReduccion50PorExtrema(obsPrincipalesCalc, 'LOCAL'),
+  }
+
+  const descuentoRIPorAspecto = calcularDescuentoRevisionInternaPorAspecto(obsRICalc, configRI, configSev)
+
+  const aspectosRI: { key: AspectoRI; conforme: boolean | null; comentario: string | null }[] = [
+    { key: 'RI_REVISION',   conforme: auditoria.ri_revision_conforme,   comentario: auditoria.ri_revision_comentario },
+    { key: 'RI_ROTULACION', conforme: auditoria.ri_rotulacion_conforme, comentario: auditoria.ri_rotulacion_comentario },
+    { key: 'RI_HIGIENE',    conforme: auditoria.ri_higiene_conforme,    comentario: auditoria.ri_higiene_comentario },
+  ]
 
   /* ── Render ─────────────────────────────────────────────────────────── */
   return (
@@ -328,6 +393,57 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
                   <EvidRO  evids={evidByArea('LOCAL')} onLightbox={setLightbox} />
                 </Seccion>
 
+                {/* ── REVISIÓN INTERNA (apartado 4) ─────────────────── */}
+                <Seccion titulo="Revisión interna" dot="bg-marron" borde="border-marron/30" fondo="bg-marron/5">
+                  {aspectosRI.map(aspecto => (
+                    <div key={aspecto.key} className="mb-4 last:mb-0 pb-4 last:pb-0 border-b last:border-b-0 border-marron/15">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide">
+                          {ASPECTO_TITULO[aspecto.key]}
+                        </p>
+                        <ConformeBadge value={aspecto.conforme} />
+                      </div>
+                      <ObsRO   obs={obsByArea(aspecto.key)} />
+                      <OportRO texto={aspecto.comentario} />
+                    </div>
+                  ))}
+                  <EvidRO evids={evidByArea('REVISION_INTERNA')} onLightbox={setLightbox} />
+                </Seccion>
+
+                {/* ── DESGLOSE DEL CÁLCULO ───────────────────────────── */}
+                <Seccion titulo="Desglose del cálculo" dot="bg-navy" borde="border-navy/20" fondo="bg-white">
+                  <div className="space-y-3 mb-1">
+                    <DesgloseFila label="Producto" valor={auditoria.nota_producto} reducido={reduccion50.PRODUCTO} />
+                    <DesgloseFila label="Servicio" valor={auditoria.nota_servicio} reducido={reduccion50.SERVICIO} />
+                    <DesgloseFila label="Local"    valor={auditoria.nota_local}    reducido={reduccion50.LOCAL} />
+                  </div>
+
+                  {descuentoRIPorAspecto.some(d => d.descuento > 0) && (
+                    <div className="mt-3 pt-3 border-t border-navy/10 space-y-1.5">
+                      <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide mb-1">
+                        Descuento por Revisión Interna
+                      </p>
+                      {descuentoRIPorAspecto.filter(d => d.descuento > 0).map(d => (
+                        <div key={d.aspecto} className="flex items-center justify-between text-xs text-navy/60">
+                          <span>{ASPECTO_TITULO[d.aspecto]}</span>
+                          <span className="font-semibold text-marron">−{d.descuento.toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between text-sm font-semibold pt-1">
+                        <span className="text-navy/70">Total Revisión Interna</span>
+                        <span className="text-marron">−{(auditoria.descuento_ri ?? 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-3 pt-3 border-t border-navy/15 flex items-center justify-between">
+                    <span className="text-sm font-bold text-navy">Total final</span>
+                    <span className={`text-lg font-bold tabular-nums ${col.text}`}>
+                      {total.toFixed(2)} <span className="text-xs font-normal text-navy/30">/ 20</span>
+                    </span>
+                  </div>
+                </Seccion>
+
               </div>
             )}
           </div>
@@ -504,6 +620,41 @@ function EvidRO({ evids, onLightbox }: { evids: AuEvidencia[]; onLightbox: (url:
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function ConformeBadge({ value }: { value: boolean | null }) {
+  if (value === null) {
+    return (
+      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide bg-navy/10 text-navy/35">
+        Sin evaluar
+      </span>
+    )
+  }
+  return (
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${
+      value ? 'bg-green-100 text-green-700' : 'bg-terranova/10 text-terranova'
+    }`}>
+      {value ? 'Conforme' : 'No conforme'}
+    </span>
+  )
+}
+
+function DesgloseFila({ label, valor, reducido }: { label: string; valor: number | null; reducido: boolean }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-navy/60">{label}</span>
+        <span className="font-semibold tabular-nums text-navy">
+          {(valor ?? 0).toFixed(2)} <span className="text-navy/30 font-normal">/ 6.67</span>
+        </span>
+      </div>
+      {reducido && (
+        <p className="text-[10px] text-marron font-semibold mt-0.5">
+          ⚠ Reducido 50% por observación extremadamente grave
+        </p>
+      )}
     </div>
   )
 }

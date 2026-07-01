@@ -1,20 +1,21 @@
 // Panel lateral con notas en vivo. Recibe valores ya calculados desde TrackingPage.
 
 interface Props {
-  notaP:      number
-  notaS:      number
-  notaL:      number
-  notaT:      number
-  onGuardar:  () => void
-  guardando:  boolean
-  guardadoOk: boolean
-  canGuardar: boolean
+  notaP:       number
+  notaS:       number
+  notaL:       number
+  descuentoRI?: number
+  notaT:       number
+  onGuardar:   () => void
+  guardando:   boolean
+  guardadoOk:  boolean
+  canGuardar:  boolean
 }
 
 const AREA_MAX = 20 / 3   // 6.6̄
 
 export default function PanelNotas({
-  notaP, notaS, notaL, notaT,
+  notaP, notaS, notaL, descuentoRI = 0, notaT,
   onGuardar, guardando, guardadoOk, canGuardar,
 }: Props) {
   return (
@@ -28,6 +29,14 @@ export default function PanelNotas({
         <FilaNota label="Producto" valor={notaP} max={AREA_MAX} />
         <FilaNota label="Servicio" valor={notaS} max={AREA_MAX} />
         <FilaNota label="Local"    valor={notaL} max={AREA_MAX} />
+        {descuentoRI > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-navy/60">Revisión Interna</span>
+            <span className="text-sm font-semibold tabular-nums text-marron">
+              −{descuentoRI.toFixed(2)}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Total */}
