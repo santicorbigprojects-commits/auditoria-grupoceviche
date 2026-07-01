@@ -17,12 +17,18 @@ import {
 } from '../../lib/calculo'
 import type {
   AuAuditoria,
+  AuCombo,
+  AuPlato,
   AuConfigSeveridad,
   AuConfigTiempos,
   Area,
   Severidad,
 } from '../../types'
-import SeccionProducto, { type PlatoConIngredientes } from '../../components/auditoria/SeccionProducto'
+import SeccionProducto, {
+  type PlatoConIngredientes,
+  type ComboConSlots,
+  type SlotConOpciones,
+} from '../../components/auditoria/SeccionProducto'
 import SeccionServicio from '../../components/auditoria/SeccionServicio'
 import SeccionLocal from '../../components/auditoria/SeccionLocal'
 import PanelNotas from '../../components/auditoria/PanelNotas'
@@ -240,7 +246,10 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [platos,              setPlatos]              = useState<PlatoConIngredientes[]>([])
+  const [combos,              setCombos]              = useState<ComboConSlots[]>([])
   const [platosSeleccionados, setPlatosSeleccionados] = useState<Set<string>>(new Set())
+  const [combosSeleccionados, setCombosSeleccionados] = useState<Set<string>>(new Set())
+  const [slotPlatoElegido,    setSlotPlatoElegido]    = useState<Map<string, string>>(new Map())
   const [tiemposMax,          setTiemposMax]          = useState<Record<TimeKey, number>>({ ...TIEMPOS_DEFAULT })
   const [configSev,           setConfigSev]           = useState<AuConfigSeveridad[]>([])
 
@@ -265,6 +274,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           { data: evidData  },
           { data: sevData   },
           platosResult,
+          combosResult,
           tiemposResult,
         ] = await Promise.all([
           supabase.from('au_auditoria_producto_items').select('*').eq('auditoria_id', aid).range(0, 9999),
@@ -274,21 +284,25 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           supabase.from('au_evidencias').select('*').eq('auditoria_id', aid).range(0, 9999),
           supabase.from('au_config_severidad').select('*'),
           cargarPlatos(lid),
+          cargarCombos(lid),
           cargarTiempos(lid),
         ])
 
         if (sevData) setConfigSev(sevData)
         setPlatos(platosResult)
+        setCombos(combosResult)
         setTiemposMax(tiemposResult)
 
         const productoItems: ProductoItemDraft[] = (itemsData ?? []).map((i: {
           plato_id: string; plato_nombre: string; ingrediente_nombre: string;
-          contiene: boolean | null;
+          contiene: boolean | null; combo_nombre: string | null; slot_nombre: string | null;
         }) => ({
           plato_id:           i.plato_id,
           plato_nombre:       i.plato_nombre,
           ingrediente_nombre: i.ingrediente_nombre,
           contiene:           i.contiene ?? false,
+          combo_nombre:       i.combo_nombre ?? undefined,
+          slot_nombre:        i.slot_nombre  ?? undefined,
         }))
 
         const servicio: ServicioDraft = {
@@ -350,8 +364,29 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           evidencias:           evidenciasMapeadas,
         })
 
-        const pids = new Set(productoItems.map(i => i.plato_id))
+        // Solo platos sueltos (sin slot) para platosSeleccionados
+        const pids = new Set(productoItems.filter(i => !i.slot_nombre).map(i => i.plato_id))
         setPlatosSeleccionados(pids)
+
+        // Reconstruir combosSeleccionados por nombre snapshot
+        const savedComboNombres = new Set(
+          productoItems.filter(i => i.combo_nombre).map(i => i.combo_nombre as string)
+        )
+        const selCombos = new Set<string>()
+        combosResult.forEach(c => { if (savedComboNombres.has(c.nombre)) selCombos.add(c.id) })
+        setCombosSeleccionados(selCombos)
+
+        // Reconstruir slotPlatoElegido por plato_id guardado en cada slot
+        const spe = new Map<string, string>()
+        combosResult.forEach(combo => {
+          combo.slots.forEach(slot => {
+            const matchItem = productoItems.find(i => i.combo_nombre === combo.nombre && i.slot_nombre === slot.nombre)
+            if (matchItem && slot.opciones.some(p => p.id === matchItem.plato_id)) {
+              spe.set(slot.id, matchItem.plato_id)
+            }
+          })
+        })
+        setSlotPlatoElegido(spe)
 
       } catch (err) {
         console.error(err)
@@ -382,6 +417,46 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
     })) as PlatoConIngredientes[]
   }
 
+  async function cargarCombos(lid: string): Promise<ComboConSlots[]> {
+    const { data: cl } = await supabase.from('au_combo_locales').select('combo_id').eq('local_id', lid)
+    if (!cl || cl.length === 0) return []
+    const comboIds = cl.map((r: { combo_id: string }) => r.combo_id)
+    const [{ data: combosData }, { data: slotsData }] = await Promise.all([
+      supabase.from('au_combos').select('*').in('id', comboIds).eq('activo', true).order('nombre'),
+      supabase.from('au_combo_slots').select('*').in('combo_id', comboIds).order('orden'),
+    ])
+    const slotIds = (slotsData ?? []).map((s: { id: string }) => s.id)
+    let opcionesData: { slot_id: string; plato_id: string }[] = []
+    if (slotIds.length > 0) {
+      const { data: op } = await supabase.from('au_combo_slot_opciones').select('slot_id, plato_id').in('slot_id', slotIds)
+      opcionesData = op ?? []
+    }
+    const platoIds = [...new Set(opcionesData.map(o => o.plato_id))]
+    let platosCat: PlatoConIngredientes[] = []
+    if (platoIds.length > 0) {
+      const [{ data: pd }, { data: id }] = await Promise.all([
+        supabase.from('au_platos').select('*').in('id', platoIds).eq('activo', true),
+        supabase.from('au_plato_ingredientes').select('*').in('plato_id', platoIds).eq('activo', true).order('orden'),
+      ])
+      platosCat = (pd ?? []).map((p: AuPlato) => ({
+        ...p,
+        ingredientes: (id ?? []).filter((i: { plato_id: string }) => i.plato_id === p.id),
+      }))
+    }
+    return (combosData ?? []).map((c: AuCombo) => ({
+      ...c,
+      slots: (slotsData ?? [])
+        .filter((s: { combo_id: string }) => s.combo_id === c.id)
+        .map((s: { id: string; nombre: string; orden: number; combo_id: string }) => ({
+          ...s,
+          opciones: opcionesData
+            .filter(o => o.slot_id === s.id)
+            .map(o => platosCat.find(p => p.id === o.plato_id))
+            .filter(Boolean) as PlatoConIngredientes[],
+        })),
+    }))
+  }
+
   async function cargarTiempos(lid: string): Promise<Record<TimeKey, number>> {
     const { data } = await supabase
       .from('au_config_tiempos')
@@ -401,12 +476,12 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
     return merged
   }
 
-  /* ── Toggle plato ─────────────────────────────────────────────────────── */
+  /* ── Toggle plato suelto ──────────────────────────────────────────────── */
   function handleTogglePlato(platoId: string, plato: PlatoConIngredientes) {
     const next = new Set(platosSeleccionados)
     if (next.has(platoId)) {
       next.delete(platoId)
-      store.setProductoItems(store.productoItems.filter(i => i.plato_id !== platoId))
+      store.setProductoItems(store.productoItems.filter(i => !(i.plato_id === platoId && !i.slot_nombre)))
     } else {
       next.add(platoId)
       const nuevos = plato.ingredientes
@@ -420,6 +495,49 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
       store.setProductoItems([...store.productoItems, ...nuevos])
     }
     setPlatosSeleccionados(next)
+  }
+
+  /* ── Toggle combo ─────────────────────────────────────────────────────── */
+  function handleToggleCombo(comboId: string, combo: ComboConSlots) {
+    const next = new Set(combosSeleccionados)
+    if (next.has(comboId)) {
+      next.delete(comboId)
+      store.setProductoItems(store.productoItems.filter(i => i.combo_nombre !== combo.nombre))
+      const nextSpe = new Map(slotPlatoElegido)
+      combo.slots.forEach(s => nextSpe.delete(s.id))
+      setSlotPlatoElegido(nextSpe)
+    } else {
+      next.add(comboId)
+    }
+    setCombosSeleccionados(next)
+  }
+
+  /* ── Elegir plato en slot ─────────────────────────────────────────────── */
+  function handleElegirPlatoEnSlot(slotId: string, platoId: string | null, combo: ComboConSlots, slot: SlotConOpciones) {
+    store.setProductoItems(
+      store.productoItems.filter(i => !(i.combo_nombre === combo.nombre && i.slot_nombre === slot.nombre))
+    )
+    const nextSpe = new Map(slotPlatoElegido)
+    if (platoId === null) {
+      nextSpe.delete(slotId)
+    } else {
+      nextSpe.set(slotId, platoId)
+      const plato = slot.opciones.find(p => p.id === platoId)
+      if (plato) {
+        const nuevos = plato.ingredientes
+          .filter(ing => ing.activo)
+          .map(ing => ({
+            plato_id:           plato.id,
+            plato_nombre:       plato.nombre,
+            ingrediente_nombre: ing.nombre,
+            contiene:           false,
+            combo_nombre:       combo.nombre,
+            slot_nombre:        slot.nombre,
+          }))
+        store.setProductoItems([...store.productoItems, ...nuevos])
+      }
+    }
+    setSlotPlatoElegido(nextSpe)
   }
 
   /* ── Severidad map ────────────────────────────────────────────────────── */
@@ -470,6 +588,8 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
             contiene:           !!i.contiene,
             limpieza:           false,
             peso_adecuado:      false,
+            combo_nombre:       i.combo_nombre ?? null,
+            slot_nombre:        i.slot_nombre  ?? null,
           }))
         )
         if (e2i) throw e2i
@@ -609,6 +729,11 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
             platos={platos}
             platosSeleccionados={platosSeleccionados}
             onTogglePlato={handleTogglePlato}
+            combos={combos}
+            combosSeleccionados={combosSeleccionados}
+            onToggleCombo={handleToggleCombo}
+            slotPlatoElegido={slotPlatoElegido}
+            onElegirPlatoEnSlot={handleElegirPlatoEnSlot}
           />
           <SeccionServicio tiemposMax={tiemposMax} />
           <SeccionLocal />

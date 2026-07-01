@@ -12,6 +12,8 @@ export interface ProductoItemDraft {
   plato_nombre:       string
   ingrediente_nombre: string
   contiene:           boolean
+  combo_nombre?:      string   // undefined = plato suelto
+  slot_nombre?:       string   // undefined = plato suelto
 }
 
 export interface ObservacionDraft {
@@ -100,7 +102,7 @@ interface AuditoriaState {
   setFecha:          (fecha: string) => void
   setMeseroNombre:   (nombre: string) => void
   setProductoItems:  (items: ProductoItemDraft[]) => void
-  toggleCheck:       (plato_id: string, ingrediente_nombre: string) => void
+  toggleCheck:       (plato_id: string, ingrediente_nombre: string, slot_nombre?: string) => void
   setServicio:       (patch: Partial<ServicioDraft>) => void
   setLocalChecklist: (patch: Partial<LocalDraft>) => void
   addObservacion:    (obs: Omit<ObservacionDraft, 'id'>) => void
@@ -146,10 +148,12 @@ export const useAuditoriaStore = create<AuditoriaState>()((set) => ({
   setMeseroNombre: (nombre) => set({ mesero_nombre: nombre }),
   setProductoItems:(items)  => set({ productoItems: items }),
 
-  toggleCheck: (plato_id, ingrediente_nombre) =>
+  toggleCheck: (plato_id, ingrediente_nombre, slot_nombre) =>
     set((s) => ({
       productoItems: s.productoItems.map((i) =>
-        i.plato_id === plato_id && i.ingrediente_nombre === ingrediente_nombre
+        i.plato_id === plato_id &&
+        i.ingrediente_nombre === ingrediente_nombre &&
+        i.slot_nombre === slot_nombre
           ? { ...i, contiene: !i.contiene }
           : i,
       ),

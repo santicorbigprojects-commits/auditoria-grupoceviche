@@ -8,8 +8,12 @@ import {
   calcularNotaLocal,
   calcularNotaTotal,
 } from '../../lib/calculo'
-import type { AuMarca, AuLocal, AuConfigSeveridad, AuConfigTiempos, Severidad, Area } from '../../types'
-import SeccionProducto, { type PlatoConIngredientes } from '../../components/auditoria/SeccionProducto'
+import type { AuMarca, AuLocal, AuConfigSeveridad, AuConfigTiempos, AuCombo, AuPlato, Severidad, Area } from '../../types'
+import SeccionProducto, {
+  type PlatoConIngredientes,
+  type ComboConSlots,
+  type SlotConOpciones,
+} from '../../components/auditoria/SeccionProducto'
 import SeccionServicio from '../../components/auditoria/SeccionServicio'
 import SeccionLocal from '../../components/auditoria/SeccionLocal'
 import PanelNotas from '../../components/auditoria/PanelNotas'
@@ -32,15 +36,18 @@ export default function TrackingPage() {
   const [configSev,     setConfigSev]     = useState<AuConfigSeveridad[]>([])
   const [loadingMaster, setLoadingMaster] = useState(true)
 
-  // Platos del local seleccionado
+  // Platos y combos del local seleccionado
   const [platos,        setPlatos]        = useState<PlatoConIngredientes[]>([])
+  const [combos,        setCombos]        = useState<ComboConSlots[]>([])
   const [loadingPlatos, setLoadingPlatos] = useState(false)
 
   // Tiempos objetivo cargados de au_config_tiempos
   const [tiemposMax, setTiemposMax] = useState<Record<TimeKey, number>>({ ...TIEMPOS_DEFAULT })
 
-  // Platos que el auditor eligió evaluar este turno
+  // Selección del auditor este turno
   const [platosSeleccionados, setPlatosSeleccionados] = useState<Set<string>>(new Set())
+  const [combosSeleccionados, setCombosSeleccionados] = useState<Set<string>>(new Set())
+  const [slotPlatoElegido,    setSlotPlatoElegido]    = useState<Map<string, string>>(new Map())
 
   // Estado de guardado
   const [guardando,    setGuardando]    = useState(false)
@@ -64,9 +71,9 @@ export default function TrackingPage() {
     load()
   }, [])
 
-  /* ── Carga de platos + tiempos al cambiar local ─────────────────────── */
+  /* ── Carga de platos + combos + tiempos al cambiar local ──────────── */
   useEffect(() => {
-    if (!store.local_id) { setPlatos([]); return }
+    if (!store.local_id) { setPlatos([]); setCombos([]); return }
 
     async function loadPlatos() {
       setLoadingPlatos(true)
@@ -75,19 +82,21 @@ export default function TrackingPage() {
         .select('plato_id')
         .eq('local_id', store.local_id)
 
-      if (!pl || pl.length === 0) { setPlatos([]); setLoadingPlatos(false); return }
+      if (!pl || pl.length === 0) { setPlatos([]); }
+      else {
+        const ids = pl.map(r => r.plato_id)
+        const [{ data: platosData }, { data: ingsData }] = await Promise.all([
+          supabase.from('au_platos').select('*').in('id', ids).eq('activo', true).order('nombre'),
+          supabase.from('au_plato_ingredientes').select('*').in('plato_id', ids).eq('activo', true).order('orden'),
+        ])
+        setPlatos((platosData ?? []).map(p => ({
+          ...p,
+          ingredientes: (ingsData ?? []).filter(i => i.plato_id === p.id),
+        })))
+      }
 
-      const ids = pl.map(r => r.plato_id)
-      const [{ data: platosData }, { data: ingsData }] = await Promise.all([
-        supabase.from('au_platos').select('*').in('id', ids).eq('activo', true).order('nombre'),
-        supabase.from('au_plato_ingredientes').select('*').in('plato_id', ids).eq('activo', true).order('orden'),
-      ])
-
-      const result: PlatoConIngredientes[] = (platosData ?? []).map(p => ({
-        ...p,
-        ingredientes: (ingsData ?? []).filter(i => i.plato_id === p.id),
-      }))
-      setPlatos(result)
+      const combosResult = await cargarCombos(store.local_id!)
+      setCombos(combosResult)
       setLoadingPlatos(false)
     }
 
@@ -97,22 +106,12 @@ export default function TrackingPage() {
         .select('*')
         .or(`local_id.is.null,local_id.eq.${store.local_id}`)
       const rows: AuConfigTiempos[] = data ?? []
-
-      // Globals first, then override with local-specific values
       const merged = { ...TIEMPOS_DEFAULT }
       const tipoMap: Record<string, TimeKey> = {
         ENTRANTE: 'entrante', PRINCIPAL: 'principal', BEBIDA: 'bebida', POSTRE: 'postre',
       }
-      // Apply globals
-      rows.filter(r => r.local_id === null).forEach(r => {
-        const k = tipoMap[r.tipo]
-        if (k) merged[k] = r.max_min
-      })
-      // Apply local overrides
-      rows.filter(r => r.local_id === store.local_id).forEach(r => {
-        const k = tipoMap[r.tipo]
-        if (k) merged[k] = r.max_min
-      })
+      rows.filter(r => r.local_id === null).forEach(r => { const k = tipoMap[r.tipo]; if (k) merged[k] = r.max_min })
+      rows.filter(r => r.local_id === store.local_id).forEach(r => { const k = tipoMap[r.tipo]; if (k) merged[k] = r.max_min })
       setTiemposMax(merged)
     }
 
@@ -120,9 +119,46 @@ export default function TrackingPage() {
     loadTiempos()
   }, [store.local_id])
 
+  async function cargarCombos(lid: string): Promise<ComboConSlots[]> {
+    const { data: cl } = await supabase.from('au_combo_locales').select('combo_id').eq('local_id', lid)
+    if (!cl || cl.length === 0) return []
+
+    const comboIds = cl.map((r: { combo_id: string }) => r.combo_id)
+    const [{ data: combosData }, { data: slotsData }] = await Promise.all([
+      supabase.from('au_combos').select('*').in('id', comboIds).eq('activo', true).order('nombre'),
+      supabase.from('au_combo_slots').select('*').in('combo_id', comboIds).order('orden'),
+    ])
+    const slotIds = (slotsData ?? []).map((s: { id: string }) => s.id)
+    let opcionesData: { slot_id: string; plato_id: string }[] = []
+    if (slotIds.length > 0) {
+      const { data: op } = await supabase.from('au_combo_slot_opciones').select('slot_id, plato_id').in('slot_id', slotIds)
+      opcionesData = op ?? []
+    }
+    const platoIds = [...new Set(opcionesData.map(o => o.plato_id))]
+    let platosCat: PlatoConIngredientes[] = []
+    if (platoIds.length > 0) {
+      const [{ data: pd }, { data: id }] = await Promise.all([
+        supabase.from('au_platos').select('*').in('id', platoIds).eq('activo', true),
+        supabase.from('au_plato_ingredientes').select('*').in('plato_id', platoIds).eq('activo', true).order('orden'),
+      ])
+      platosCat = (pd ?? []).map((p: AuPlato) => ({ ...p, ingredientes: (id ?? []).filter((i: { plato_id: string }) => i.plato_id === p.id) }))
+    }
+    return (combosData ?? []).map((c: AuCombo) => ({
+      ...c,
+      slots: (slotsData ?? [])
+        .filter((s: { combo_id: string }) => s.combo_id === c.id)
+        .map((s: { id: string; nombre: string; orden: number; combo_id: string }) => ({
+          ...s,
+          opciones: opcionesData.filter(o => o.slot_id === s.id).map(o => platosCat.find(p => p.id === o.plato_id)).filter(Boolean) as PlatoConIngredientes[],
+        })),
+    }))
+  }
+
   /* ── Reset de selección al cambiar local ───────────────────────────── */
   useEffect(() => {
     setPlatosSeleccionados(new Set())
+    setCombosSeleccionados(new Set())
+    setSlotPlatoElegido(new Map())
     store.setProductoItems([])
     setGuardadoOk(false)
     setErrorGuardar(null)
@@ -130,12 +166,13 @@ export default function TrackingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.local_id])
 
-  /* ── Toggle plato ───────────────────────────────────────────────────── */
+  /* ── Toggle plato suelto ────────────────────────────────────────────── */
   function handleTogglePlato(platoId: string, plato: PlatoConIngredientes) {
     const next = new Set(platosSeleccionados)
     if (next.has(platoId)) {
       next.delete(platoId)
-      store.setProductoItems(store.productoItems.filter(i => i.plato_id !== platoId))
+      // Solo eliminar ítems de este plato suelto (no los de combos que lo usen)
+      store.setProductoItems(store.productoItems.filter(i => !(i.plato_id === platoId && !i.slot_nombre)))
     } else {
       next.add(platoId)
       const nuevos = plato.ingredientes
@@ -149,6 +186,50 @@ export default function TrackingPage() {
       store.setProductoItems([...store.productoItems, ...nuevos])
     }
     setPlatosSeleccionados(next)
+  }
+
+  /* ── Toggle combo ───────────────────────────────────────────────────── */
+  function handleToggleCombo(comboId: string, combo: ComboConSlots) {
+    const next = new Set(combosSeleccionados)
+    if (next.has(comboId)) {
+      next.delete(comboId)
+      store.setProductoItems(store.productoItems.filter(i => i.combo_nombre !== combo.nombre))
+      const nextSpe = new Map(slotPlatoElegido)
+      combo.slots.forEach(s => nextSpe.delete(s.id))
+      setSlotPlatoElegido(nextSpe)
+    } else {
+      next.add(comboId)
+    }
+    setCombosSeleccionados(next)
+  }
+
+  /* ── Elegir plato en slot de combo ─────────────────────────────────── */
+  function handleElegirPlatoEnSlot(slotId: string, platoId: string | null, combo: ComboConSlots, slot: SlotConOpciones) {
+    // Quitar ítems anteriores de este slot
+    store.setProductoItems(
+      store.productoItems.filter(i => !(i.combo_nombre === combo.nombre && i.slot_nombre === slot.nombre))
+    )
+    const nextSpe = new Map(slotPlatoElegido)
+    if (platoId === null) {
+      nextSpe.delete(slotId)
+    } else {
+      nextSpe.set(slotId, platoId)
+      const plato = slot.opciones.find(p => p.id === platoId)
+      if (plato) {
+        const nuevos = plato.ingredientes
+          .filter(ing => ing.activo)
+          .map(ing => ({
+            plato_id:           plato.id,
+            plato_nombre:       plato.nombre,
+            ingrediente_nombre: ing.nombre,
+            contiene:           false,
+            combo_nombre:       combo.nombre,
+            slot_nombre:        slot.nombre,
+          }))
+        store.setProductoItems([...store.productoItems, ...nuevos])
+      }
+    }
+    setSlotPlatoElegido(nextSpe)
   }
 
   /* ── Config de severidad → mapa ─────────────────────────────────────── */
@@ -205,6 +286,8 @@ export default function TrackingPage() {
             contiene:           !!i.contiene,
             limpieza:           false,
             peso_adecuado:      false,
+            combo_nombre:       i.combo_nombre ?? null,
+            slot_nombre:        i.slot_nombre  ?? null,
           }))
         )
         if (e2) throw e2
@@ -247,6 +330,8 @@ export default function TrackingPage() {
 
       store.reset()
       setPlatosSeleccionados(new Set())
+      setCombosSeleccionados(new Set())
+      setSlotPlatoElegido(new Map())
       setGuardadoOk(true)
 
     } catch (err) {
@@ -365,6 +450,11 @@ export default function TrackingPage() {
                   platos={platos}
                   platosSeleccionados={platosSeleccionados}
                   onTogglePlato={handleTogglePlato}
+                  combos={combos}
+                  combosSeleccionados={combosSeleccionados}
+                  onToggleCombo={handleToggleCombo}
+                  slotPlatoElegido={slotPlatoElegido}
+                  onElegirPlatoEnSlot={handleElegirPlatoEnSlot}
                 />
                 <SeccionServicio tiemposMax={tiemposMax} />
                 <SeccionLocal />

@@ -116,11 +116,33 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
   const total = auditoria.nota_total ?? 0
   const col   = semColor(total)
 
-  const platoGroups = items.reduce((acc, item) => {
-    if (!acc[item.plato_id]) acc[item.plato_id] = { nombre: item.plato_nombre, rows: [] }
-    acc[item.plato_id].rows.push(item)
-    return acc
-  }, {} as Record<string, { nombre: string; rows: AuAuditoriaProductoItem[] }>)
+  // Platos sueltos: combo_nombre es null
+  const sueltoGroups = items
+    .filter(i => !i.combo_nombre)
+    .reduce((acc, item) => {
+      if (!acc[item.plato_id]) acc[item.plato_id] = { nombre: item.plato_nombre, rows: [] }
+      acc[item.plato_id].rows.push(item)
+      return acc
+    }, {} as Record<string, { nombre: string; rows: AuAuditoriaProductoItem[] }>)
+
+  // Ingredientes de combos: agrupados por combo_nombre → slot_nombre
+  const comboItems = items.filter(i => i.combo_nombre)
+  const comboGroups = (() => {
+    const map = new Map<string, { slotNombre: string; platoNombre: string; platoId: string; rows: AuAuditoriaProductoItem[] }[]>()
+    comboItems.forEach(item => {
+      const cn = item.combo_nombre!
+      if (!map.has(cn)) map.set(cn, [])
+      const slots = map.get(cn)!
+      const key = item.slot_nombre ?? ''
+      let slot = slots.find(s => s.slotNombre === key)
+      if (!slot) {
+        slot = { slotNombre: key, platoNombre: item.plato_nombre, platoId: item.plato_id, rows: [] }
+        slots.push(slot)
+      }
+      slot.rows.push(item)
+    })
+    return map
+  })()
 
   const evidByArea = (area: Area) => evidencias.filter(e => e.area === area)
   const obsByArea  = (area: Area) => obs.filter(o => o.area === area)
@@ -192,20 +214,46 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
 
                 {/* ── PRODUCTO ─────────────────────────────────────── */}
                 <Seccion titulo="Producto" dot="bg-naranja" borde="border-naranja/30" fondo="bg-naranja/5">
-                  {Object.keys(platoGroups).length === 0 ? (
+                  {items.length === 0 ? (
                     <p className="text-sm text-navy/40 italic mb-4">No se evaluaron platos en esta auditoría.</p>
                   ) : (
                     <div className="space-y-4 mb-4">
-                      {Object.entries(platoGroups).map(([pid, g]) => (
+                      {/* Platos sueltos */}
+                      {Object.entries(sueltoGroups).map(([pid, g]) => (
                         <div key={pid}>
                           <p className="text-sm font-semibold text-navy mb-2">{g.nombre}</p>
-                          <div className="space-y-2">
+                          <div className="space-y-1.5">
                             {g.rows.map((item, idx) => (
-                              <div key={idx} className="px-3 py-2.5 rounded-xl bg-white border border-navy/10">
-                                <CheckRow label={item.ingrediente_nombre} val={item.contiene} />
-                              </div>
+                              <CheckRow key={idx} label={item.ingrediente_nombre} val={item.contiene} />
                             ))}
                           </div>
+                        </div>
+                      ))}
+
+                      {/* Combos */}
+                      {[...comboGroups.entries()].map(([comboNombre, slots]) => (
+                        <div key={comboNombre} className="rounded-2xl border-2 border-ambar/25 bg-ambar/5 p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-[9px] font-bold bg-ambar/20 text-ambar px-1.5 py-0.5 rounded uppercase tracking-wide">
+                              COMBO
+                            </span>
+                            <p className="text-sm font-semibold text-navy">{comboNombre}</p>
+                          </div>
+                          {slots.map(slot => (
+                            <div key={slot.slotNombre} className="mb-3 last:mb-0">
+                              <p className="text-[10px] font-bold text-ambar/80 uppercase tracking-wide mb-1">
+                                {slot.slotNombre}
+                                <span className="ml-1.5 font-normal normal-case text-navy/50">
+                                  · {slot.platoNombre}
+                                </span>
+                              </p>
+                              <div className="ml-3 pl-3 border-l-2 border-ambar/20 space-y-1.5">
+                                {slot.rows.map((item, idx) => (
+                                  <CheckRow key={idx} label={item.ingrediente_nombre} val={item.contiene} />
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
