@@ -118,6 +118,7 @@ export interface AuAuditoriaServicio {
   auditoria_id:            string
   fid_speech:              boolean | null
   fid_nombre_camarero:     boolean | null
+  fid_tarjeta:             boolean | null
   ups_bebidas:             boolean | null
   ups_meta_dia:            boolean | null
   pres_uniformes:          boolean | null
@@ -143,6 +144,7 @@ export interface AuAuditoriaLocal {
   limp_sala:        boolean | null
   limp_banos:       boolean | null
   limp_barras:      boolean | null
+  limp_cocina:      boolean | null
 }
 
 export interface AuObservacion {

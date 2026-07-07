@@ -9,6 +9,7 @@ export interface ItemProducto {
 export interface ItemServicio {
   fid_speech:              boolean | null
   fid_nombre_camarero:     boolean | null
+  fid_tarjeta:             boolean | null
   ups_bebidas:             boolean | null
   ups_meta_dia:            boolean | null
   pres_uniformes:          boolean | null
@@ -28,6 +29,7 @@ export interface ItemLocal {
   limp_sala:        boolean | null
   limp_banos:       boolean | null
   limp_barras:      boolean | null
+  limp_cocina:      boolean | null
 }
 
 export interface ObservacionCalculo {
@@ -107,11 +109,11 @@ export function calcularNotaProducto(
 }
 
 const SERVICIO_CAMPOS: (keyof ItemServicio)[] = [
-  'fid_speech', 'fid_nombre_camarero',
+  'fid_speech', 'fid_nombre_camarero', 'fid_tarjeta',
   'ups_bebidas', 'ups_meta_dia',
   'pres_uniformes', 'pres_cabellos', 'pres_unas', 'pres_zapatos', 'pres_barba_o_maquillaje',
   'tiempo_entrante_ok', 'tiempo_principal_ok', 'tiempo_bebida_ok', 'tiempo_postre_ok',
-]  // 13 ítems
+]  // 14 ítems
 
 export function calcularNotaServicio(
   srv:    Partial<ItemServicio>,
@@ -119,13 +121,13 @@ export function calcularNotaServicio(
   config: ConfigSeveridad = DEFAULT_CONFIG,
 ): number {
   const trues = SERVICIO_CAMPOS.filter(k => srv[k] === true).length
-  const base  = (trues / 13) * AREA_MAX
+  const base  = (trues / 14) * AREA_MAX
   return aplicarDescuentosArea(base, obs, 'SERVICIO', config)
 }
 
 const LOCAL_CAMPOS: (keyof ItemLocal)[] = [
-  'cart_actualizada', 'cart_completa', 'limp_sala', 'limp_banos', 'limp_barras',
-]  // 5 ítems
+  'cart_actualizada', 'cart_completa', 'limp_sala', 'limp_banos', 'limp_barras', 'limp_cocina',
+]  // 6 ítems
 
 export function calcularNotaLocal(
   local:  Partial<ItemLocal>,
@@ -133,7 +135,7 @@ export function calcularNotaLocal(
   config: ConfigSeveridad = DEFAULT_CONFIG,
 ): number {
   const trues = LOCAL_CAMPOS.filter(k => local[k] === true).length
-  const base  = (trues / 5) * AREA_MAX
+  const base  = (trues / 6) * AREA_MAX
   return aplicarDescuentosArea(base, obs, 'LOCAL', config)
 }
 

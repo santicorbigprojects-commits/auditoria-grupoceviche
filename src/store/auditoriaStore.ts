@@ -27,6 +27,7 @@ export interface ObservacionDraft {
 export interface ServicioDraft {
   fid_speech:              boolean
   fid_nombre_camarero:     boolean
+  fid_tarjeta:             boolean
   ups_bebidas:             boolean
   ups_meta_dia:            boolean
   pres_uniformes:          boolean
@@ -50,11 +51,13 @@ export interface LocalDraft {
   limp_sala:        boolean
   limp_banos:       boolean
   limp_barras:      boolean
+  limp_cocina:      boolean
 }
 
 const SERVICIO_INICIAL: ServicioDraft = {
   fid_speech:              false,
   fid_nombre_camarero:     false,
+  fid_tarjeta:             false,
   ups_bebidas:             false,
   ups_meta_dia:            false,
   pres_uniformes:          false,
@@ -78,6 +81,7 @@ const LOCAL_INICIAL: LocalDraft = {
   limp_sala:        false,
   limp_banos:       false,
   limp_barras:      false,
+  limp_cocina:      false,
 }
 
 const EVIDENCIAS_INICIAL: Record<AreaEvidencia, EvidenciaDraft[]> = {

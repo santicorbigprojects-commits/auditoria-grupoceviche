@@ -56,8 +56,9 @@ export default function SeccionServicio({ tiemposMax }: Props) {
 
       {/* Fidelización */}
       <Group titulo="Fidelización">
-        <Item label="Speech de bienvenida" checked={!!servicio.fid_speech}          onToggle={() => toggle('fid_speech')} />
-        <Item label="Nombre del camarero"  checked={!!servicio.fid_nombre_camarero} onToggle={() => toggle('fid_nombre_camarero')} />
+        <Item label="Speech de bienvenida"                      checked={!!servicio.fid_speech}          onToggle={() => toggle('fid_speech')} />
+        <Item label="Nombre del camarero"                       checked={!!servicio.fid_nombre_camarero} onToggle={() => toggle('fid_nombre_camarero')} />
+        <Item label="Comunicó sobre la tarjeta de fidelización" checked={!!servicio.fid_tarjeta}         onToggle={() => toggle('fid_tarjeta')} />
       </Group>
 
       {/* Upselling */}

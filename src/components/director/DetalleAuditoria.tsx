@@ -333,8 +333,9 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
                   {servicio ? (
                     <>
                       <GrupoCheck titulo="Fidelización">
-                        <CheckRow label="Speech de bienvenida" val={servicio.fid_speech} />
-                        <CheckRow label="Nombre del camarero"  val={servicio.fid_nombre_camarero} />
+                        <CheckRow label="Speech de bienvenida"                      val={servicio.fid_speech} />
+                        <CheckRow label="Nombre del camarero"                       val={servicio.fid_nombre_camarero} />
+                        <CheckRow label="Comunicó sobre la tarjeta de fidelización" val={servicio.fid_tarjeta} />
                       </GrupoCheck>
 
                       <GrupoCheck titulo="Upselling">
@@ -375,14 +376,15 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
                   {localData ? (
                     <>
                       <GrupoCheck titulo="Cartelería">
-                        <CheckRow label="Carta actualizada" val={localData.cart_actualizada} />
-                        <CheckRow label="Carta completa"    val={localData.cart_completa} />
+                        <CheckRow label="Carta actualizada"    val={localData.cart_actualizada} />
+                        <CheckRow label="Carta en buen estado" val={localData.cart_completa} />
                       </GrupoCheck>
 
                       <GrupoCheck titulo="Limpieza">
-                        <CheckRow label="Sala"   val={localData.limp_sala} />
+                        <CheckRow label="Salón"  val={localData.limp_sala} />
                         <CheckRow label="Baños"  val={localData.limp_banos} />
-                        <CheckRow label="Barras" val={localData.limp_barras} />
+                        <CheckRow label="Barra"  val={localData.limp_barras} />
+                        <CheckRow label="Cocina" val={localData.limp_cocina} />
                       </GrupoCheck>
                     </>
                   ) : (

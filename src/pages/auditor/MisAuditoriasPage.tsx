@@ -41,6 +41,7 @@ import SeccionRevisionInterna from '../../components/auditoria/SeccionRevisionIn
 import PanelNotas from '../../components/auditoria/PanelNotas'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { eliminarAuditoria } from '../../lib/eliminarAuditoria'
+import { exportarAuditoriasExcel } from '../../lib/exportarExcel'
 
 const CONFIG_RI_DEFAULT: ConfigRI = { RI_REVISION: 2, RI_ROTULACION: 2, RI_HIGIENE: 3 }
 
@@ -96,7 +97,7 @@ interface ListaProps {
 }
 
 function ListaAuditorias({ onEditar }: ListaProps) {
-  const { cut } = useAuthStore()
+  const { cut, rol } = useAuthStore()
   const [auditorias, setAuditorias] = useState<AuAuditoria[]>([])
   const [localesMap,  setLocalesMap]  = useState<Record<string, string>>({})
   const [loading,     setLoading]     = useState(true)
@@ -104,6 +105,22 @@ function ListaAuditorias({ onEditar }: ListaProps) {
   const [aEliminar,   setAEliminar]   = useState<AuAuditoria | null>(null)
   const [eliminando,  setEliminando]  = useState(false)
   const [errorEliminar, setErrorEliminar] = useState<string | null>(null)
+  const [exportando,  setExportando]  = useState(false)
+  const [errorExport, setErrorExport] = useState<string | null>(null)
+
+  async function handleExportar() {
+    if (!cut || !rol) return
+    setExportando(true)
+    setErrorExport(null)
+    try {
+      await exportarAuditoriasExcel(cut, rol)
+    } catch (err) {
+      console.error(err)
+      setErrorExport(err instanceof Error ? err.message : 'Error al exportar. Intenta de nuevo.')
+    } finally {
+      setExportando(false)
+    }
+  }
 
   async function load() {
     setLoading(true)
@@ -168,13 +185,37 @@ function ListaAuditorias({ onEditar }: ListaProps) {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-navy" style={{ fontFamily: 'Poppins, sans-serif' }}>
-          Mis auditorías
-        </h2>
-        <p className="text-sm text-navy/40 mt-0.5">
-          {auditorias.length} {auditorias.length === 1 ? 'registrada' : 'registradas'}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-navy" style={{ fontFamily: 'Poppins, sans-serif' }}>
+            Mis auditorías
+          </h2>
+          <p className="text-sm text-navy/40 mt-0.5">
+            {auditorias.length} {auditorias.length === 1 ? 'registrada' : 'registradas'}
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <button
+            type="button"
+            onClick={handleExportar}
+            disabled={exportando || auditorias.length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-navy text-white text-sm font-semibold
+                       hover:bg-navy/85 disabled:opacity-40 transition whitespace-nowrap"
+          >
+            {exportando ? (
+              <span className="animate-spin w-4 h-4 rounded-full border-2 border-white/40 border-t-white" />
+            ) : (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            )}
+            {exportando ? 'Exportando…' : 'Exportar a Excel'}
+          </button>
+          {errorExport && (
+            <p className="text-xs text-terranova max-w-[240px] text-right">{errorExport}</p>
+          )}
+        </div>
       </div>
 
       {auditorias.length === 0 ? (
@@ -375,6 +416,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
         const servicio: ServicioDraft = {
           fid_speech:              servData?.fid_speech              ?? false,
           fid_nombre_camarero:     servData?.fid_nombre_camarero     ?? false,
+          fid_tarjeta:             servData?.fid_tarjeta             ?? false,
           ups_bebidas:             servData?.ups_bebidas             ?? false,
           ups_meta_dia:            servData?.ups_meta_dia            ?? false,
           pres_uniformes:          servData?.pres_uniformes          ?? false,
@@ -398,6 +440,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           limp_sala:        locData?.limp_sala        ?? false,
           limp_banos:       locData?.limp_banos       ?? false,
           limp_barras:      locData?.limp_barras      ?? false,
+          limp_cocina:      locData?.limp_cocina      ?? false,
         }
 
         const observaciones: ObservacionDraft[] = (obsData ?? []).map((o: {

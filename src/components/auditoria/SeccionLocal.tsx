@@ -17,14 +17,15 @@ export default function SeccionLocal() {
       </div>
 
       <Group titulo="Cartelería">
-        <Item label="Carta actualizada" checked={localChecklist.cart_actualizada} onToggle={() => toggle('cart_actualizada')} />
-        <Item label="Carta completa"    checked={localChecklist.cart_completa}    onToggle={() => toggle('cart_completa')} />
+        <Item label="Carta actualizada"    checked={localChecklist.cart_actualizada} onToggle={() => toggle('cart_actualizada')} />
+        <Item label="Carta en buen estado" checked={localChecklist.cart_completa}    onToggle={() => toggle('cart_completa')} />
       </Group>
 
       <Group titulo="Limpieza">
-        <Item label="Sala"   checked={localChecklist.limp_sala}   onToggle={() => toggle('limp_sala')} />
-        <Item label="Baños"  checked={localChecklist.limp_banos}  onToggle={() => toggle('limp_banos')} />
-        <Item label="Barras" checked={localChecklist.limp_barras} onToggle={() => toggle('limp_barras')} />
+        <Item label="Salón"   checked={localChecklist.limp_sala}   onToggle={() => toggle('limp_sala')} />
+        <Item label="Baños"   checked={localChecklist.limp_banos}  onToggle={() => toggle('limp_banos')} />
+        <Item label="Barra"   checked={localChecklist.limp_barras} onToggle={() => toggle('limp_barras')} />
+        <Item label="Cocina"  checked={localChecklist.limp_cocina} onToggle={() => toggle('limp_cocina')} />
       </Group>
 
       <ObservacionesEditor area="LOCAL" />
