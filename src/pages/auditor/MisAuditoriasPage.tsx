@@ -42,6 +42,7 @@ import PanelNotas from '../../components/auditoria/PanelNotas'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { eliminarAuditoria } from '../../lib/eliminarAuditoria'
 import { exportarAuditoriasExcel } from '../../lib/exportarExcel'
+import { exportarAuditoriaPDF } from '../../lib/exportarPDF'
 
 const CONFIG_RI_DEFAULT: ConfigRI = { RI_REVISION: 2, RI_ROTULACION: 2, RI_HIGIENE: 3 }
 
@@ -272,6 +273,8 @@ function FilaAuditoria({
   onEliminar,
 }: { auditoria: AuAuditoria; localNombre: string; onEditar: () => void; onEliminar: () => void }) {
   const total = a.nota_total ?? 0
+  const [exportandoPDF, setExportandoPDF] = useState(false)
+  const [errorPDF,      setErrorPDF]      = useState<string | null>(null)
 
   const fechaLabel = (() => {
     try {
@@ -283,6 +286,19 @@ function FilaAuditoria({
 
   const semaforoColor = total >= 16 ? 'bg-green-500' : total >= 12 ? 'bg-ambar' : 'bg-terranova'
   const totalColor    = total >= 16 ? 'text-green-600' : total >= 12 ? 'text-ambar' : 'text-terranova'
+
+  async function handleExportarPDF() {
+    setExportandoPDF(true)
+    setErrorPDF(null)
+    try {
+      await exportarAuditoriaPDF(a, localNombre)
+    } catch (err) {
+      console.error(err)
+      setErrorPDF('Error al generar el PDF. Intenta de nuevo.')
+    } finally {
+      setExportandoPDF(false)
+    }
+  }
 
   return (
     <tr className="hover:bg-navy/5 transition-colors">
@@ -309,6 +325,24 @@ function FilaAuditoria({
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
+            onClick={handleExportarPDF}
+            disabled={exportandoPDF}
+            title="Exportar a PDF"
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-navy/20 text-navy/55
+                       hover:border-navy hover:text-navy transition font-medium whitespace-nowrap disabled:opacity-40"
+          >
+            {exportandoPDF ? (
+              <span className="animate-spin w-3 h-3 rounded-full border-2 border-navy/30 border-t-navy" />
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            )}
+            Exportar
+          </button>
+          <button
+            type="button"
             onClick={onEditar}
             className="text-xs px-3 py-1.5 rounded-lg border border-navy/20 text-navy/55
                        hover:border-naranja hover:text-naranja transition font-medium whitespace-nowrap"
@@ -324,6 +358,9 @@ function FilaAuditoria({
             Eliminar
           </button>
         </div>
+        {errorPDF && (
+          <p className="text-[10px] text-terranova text-right mt-1 max-w-[220px] ml-auto">{errorPDF}</p>
+        )}
       </td>
     </tr>
   )
