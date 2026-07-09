@@ -6,6 +6,9 @@ import type { AuLocal, AuMarca, AuAuditoria, AuObservacion } from '../../types'
 import DetalleAuditoria from '../../components/director/DetalleAuditoria'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { eliminarAuditoria } from '../../lib/eliminarAuditoria'
+import AccionesMejoraPage from '../AccionesMejoraPage'
+
+type Tab = 'historial' | 'acciones'
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 function semColor(nota: number) {
@@ -19,6 +22,8 @@ interface LatestAud { fecha: string; nota_total: number }
 /* ── Componente ────────────────────────────────────────────────────────── */
 export default function DirectorPage() {
   const { cut, rol } = useAuthStore()
+
+  const [tab, setTab] = useState<Tab>('historial')
 
   const [locales,       setLocales]       = useState<AuLocal[]>([])
   const [marcas,        setMarcas]        = useState<AuMarca[]>([])
@@ -152,8 +157,14 @@ export default function DirectorPage() {
     {
       label:   'Historial',
       icon:    <IconHistorial />,
-      onClick: () => {},
-      active:  true,
+      onClick: () => setTab('historial'),
+      active:  tab === 'historial',
+    },
+    {
+      label:   'Acciones de mejora',
+      icon:    <IconAcciones />,
+      onClick: () => setTab('acciones'),
+      active:  tab === 'acciones',
     },
   ]
 
@@ -168,6 +179,9 @@ export default function DirectorPage() {
 
   return (
     <SidebarLayout navItems={navItems}>
+      {tab === 'acciones' ? (
+        <AccionesMejoraPage />
+      ) : (
       <div className="p-6 max-w-6xl mx-auto">
 
         <div className="mb-6">
@@ -355,6 +369,7 @@ export default function DirectorPage() {
           )}
         </div>
       </div>
+      )}
 
       {/* Modal detalle */}
       {detalleAud && (
@@ -386,6 +401,15 @@ function IconHistorial() {
     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round"
         d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    </svg>
+  )
+}
+
+function IconAcciones() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   )
 }

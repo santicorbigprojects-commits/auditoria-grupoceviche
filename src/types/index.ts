@@ -166,6 +166,15 @@ export interface AuConfigRI {
   max_descuento: number
 }
 
+export interface AuAccionMejora {
+  id:               string
+  observacion_id:   string
+  accion:           string | null
+  fecha_evaluacion: string | null
+  resuelto:         boolean
+  actualizado_en:   string
+}
+
 export interface AuEvidencia {
   id:           string
   auditoria_id: string

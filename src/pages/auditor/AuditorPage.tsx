@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import SidebarLayout, { type NavItem } from '../../components/ui/SidebarLayout'
-import TrackingPage      from './TrackingPage'
-import CalendarioPage    from './CalendarioPage'
-import ConfiguracionPage from './ConfiguracionPage'
-import MisAuditoriasPage from './MisAuditoriasPage'
+import TrackingPage        from './TrackingPage'
+import CalendarioPage      from './CalendarioPage'
+import ConfiguracionPage   from './ConfiguracionPage'
+import MisAuditoriasPage   from './MisAuditoriasPage'
+import AccionesMejoraPage  from '../AccionesMejoraPage'
 
-type Tab = 'tracking' | 'historial' | 'calendario' | 'config'
+type Tab = 'tracking' | 'historial' | 'acciones' | 'calendario' | 'config'
 
 export default function AuditorPage() {
   const [tab, setTab] = useState<Tab>('tracking')
@@ -24,6 +25,12 @@ export default function AuditorPage() {
       active:  tab === 'historial',
     },
     {
+      label:   'Acciones de mejora',
+      icon:    <IconAcciones />,
+      onClick: () => setTab('acciones'),
+      active:  tab === 'acciones',
+    },
+    {
       label:   'Calendario',
       icon:    <IconCalendar />,
       onClick: () => setTab('calendario'),
@@ -39,8 +46,9 @@ export default function AuditorPage() {
 
   return (
     <SidebarLayout navItems={navItems}>
-      {tab === 'tracking'  && <TrackingPage />}
-      {tab === 'historial' && <MisAuditoriasPage />}
+      {tab === 'tracking'   && <TrackingPage />}
+      {tab === 'historial'  && <MisAuditoriasPage />}
+      {tab === 'acciones'   && <AccionesMejoraPage />}
       {tab === 'calendario' && <CalendarioPage />}
       {tab === 'config'     && <ConfiguracionPage />}
     </SidebarLayout>
@@ -61,6 +69,15 @@ function IconHistorial() {
     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round"
         d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  )
+}
+
+function IconAcciones() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   )
 }
