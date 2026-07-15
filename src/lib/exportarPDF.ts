@@ -144,12 +144,13 @@ const CONFIG_SEV_DEFAULT: ConfigSeveridad = {
 }
 const CONFIG_RI_DEFAULT: ConfigRI = { RI_REVISION: 2, RI_ROTULACION: 2, RI_HIGIENE: 3 }
 
-type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
+type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre' | 'sandwich' | 'jugos'
 const TIEMPOS_DEFAULT: Record<TimeKey, number> = {
-  entrante: 10, principal: 20, bebida: 5, postre: 10,
+  entrante: 10, principal: 20, bebida: 5, postre: 10, sandwich: 10, jugos: 5,
 }
 const TIEMPO_LABEL: Record<TimeKey, string> = {
   entrante: 'Entrante', principal: 'Plato principal', bebida: 'Bebida', postre: 'Postre',
+  sandwich: 'Sándwich', jugos: 'Jugos',
 }
 
 function esAreaPrincipal(area: Area | AspectoRI): area is Area {
@@ -408,7 +409,10 @@ export async function exportarAuditoriaPDF(auditoria: AuAuditoria, localNombre: 
     .select('*')
     .or(`local_id.is.null,local_id.eq.${lid}`)
   const tiemposMax = { ...TIEMPOS_DEFAULT }
-  const tipoMap: Record<string, TimeKey> = { ENTRANTE: 'entrante', PRINCIPAL: 'principal', BEBIDA: 'bebida', POSTRE: 'postre' }
+  const tipoMap: Record<string, TimeKey> = {
+    ENTRANTE: 'entrante', PRINCIPAL: 'principal', BEBIDA: 'bebida', POSTRE: 'postre',
+    SANDWICH: 'sandwich', JUGOS: 'jugos',
+  }
   const tiemposRows: { local_id: string | null; tipo: string; max_min: number }[] = tiemposData ?? []
   tiemposRows.filter(r => r.local_id === null).forEach(r => { const k = tipoMap[r.tipo]; if (k) tiemposMax[k] = r.max_min })
   tiemposRows.filter(r => r.local_id === lid).forEach(r => { const k = tipoMap[r.tipo]; if (k) tiemposMax[k] = r.max_min })
@@ -462,12 +466,28 @@ export async function exportarAuditoriaPDF(auditoria: AuAuditoria, localNombre: 
       AMBAR,
       { 2: { cellWidth: 22, halign: 'center' } },
     )
-    const tiempoRows: string[][] = (['entrante', 'principal', 'bebida', 'postre'] as TimeKey[]).map(k => {
-      const real = (servicio as unknown as Record<string, number | null>)[`tiempo_${k}_min`]
-      const ok   = (servicio as unknown as Record<string, boolean | null>)[`tiempo_${k}_ok`]
-      return [TIEMPO_LABEL[k], real != null ? `${real} min` : '-', `${tiemposMax[k]} min`, siNo(ok)]
-    })
-    tabla(doc, cursor, [['Tiempo', 'Real', 'Máximo', 'Cumple']], tiempoRows, AMBAR, { 3: { cellWidth: 22, halign: 'center' } })
+    const servRec = servicio as unknown as Record<string, unknown>
+    if (servRec['tiempos_base_activo'] === false) {
+      textoVacio(doc, cursor, 'Tiempos de atención no evaluados en esta auditoría.')
+    } else {
+      const tiempoRows: string[][] = (['entrante', 'principal', 'bebida', 'postre'] as TimeKey[]).map(k => {
+        const real = (servicio as unknown as Record<string, number | null>)[`tiempo_${k}_min`]
+        const ok   = (servicio as unknown as Record<string, boolean | null>)[`tiempo_${k}_ok`]
+        return [TIEMPO_LABEL[k], real != null ? `${real} min` : '-', `${tiemposMax[k]} min`, siNo(ok)]
+      })
+      tabla(doc, cursor, [['Tiempo', 'Real', 'Máximo', 'Cumple']], tiempoRows, AMBAR, { 3: { cellWidth: 22, halign: 'center' } })
+    }
+
+    const cholitoKeys = (['sandwich', 'jugos'] as TimeKey[]).filter(k => servRec[`tiempo_${k}_activo`] === true)
+    if (cholitoKeys.length > 0) {
+      subTitulo(doc, cursor, 'Tiempos adicionales — Cholito')
+      const tiempoCholitoRows: string[][] = cholitoKeys.map(k => {
+        const real = (servicio as unknown as Record<string, number | null>)[`tiempo_${k}_min`]
+        const ok   = (servicio as unknown as Record<string, boolean | null>)[`tiempo_${k}_ok`]
+        return [TIEMPO_LABEL[k], real != null ? `${real} min` : '-', `${tiemposMax[k]} min`, siNo(ok)]
+      })
+      tabla(doc, cursor, [['Tiempo', 'Real', 'Máximo', 'Cumple']], tiempoCholitoRows, AMBAR, { 3: { cellWidth: 22, halign: 'center' } })
+    }
   } else {
     textoVacio(doc, cursor, 'Sin datos de servicio.')
   }

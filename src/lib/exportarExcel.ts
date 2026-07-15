@@ -95,6 +95,20 @@ const TIEMPO_MIN_FIELD: Record<string, string> = {
   tiempo_postre_ok:    'tiempo_postre_min',
 }
 
+/** Tiempos exclusivos de Cholito: solo se exportan si su flag *_activo está en true. */
+const TIEMPO_CHOLITO_OK_LABEL: Record<string, string> = {
+  tiempo_sandwich_ok: 'Tiempo: Sándwich (Cholito)',
+  tiempo_jugos_ok:    'Tiempo: Jugos (Cholito)',
+}
+const TIEMPO_CHOLITO_MIN_FIELD: Record<string, string> = {
+  tiempo_sandwich_ok: 'tiempo_sandwich_min',
+  tiempo_jugos_ok:    'tiempo_jugos_min',
+}
+const TIEMPO_CHOLITO_ACTIVO_FIELD: Record<string, string> = {
+  tiempo_sandwich_ok: 'tiempo_sandwich_activo',
+  tiempo_jugos_ok:    'tiempo_jugos_activo',
+}
+
 const ASPECTO_TITULO: Record<AspectoRI, string> = {
   RI_REVISION:   'Revisión de productos',
   RI_ROTULACION: 'Rotulación de productos',
@@ -220,8 +234,19 @@ export async function exportarAuditoriasExcel(cut: string, rol: Rol): Promise<vo
       for (const [campo, label] of Object.entries(SERVICIO_LABEL)) {
         push('SERVICIO', label, siNo(serv[campo] as boolean | null), '')
       }
-      for (const [campo, label] of Object.entries(TIEMPO_OK_LABEL)) {
-        const real = serv[TIEMPO_MIN_FIELD[campo]] as number | null
+
+      if (serv['tiempos_base_activo'] === false) {
+        push('SERVICIO', 'Tiempos de atención', '', 'No evaluados en esta auditoría')
+      } else {
+        for (const [campo, label] of Object.entries(TIEMPO_OK_LABEL)) {
+          const real = serv[TIEMPO_MIN_FIELD[campo]] as number | null
+          push('SERVICIO', label, siNo(serv[campo] as boolean | null), real != null ? `${real} min` : '')
+        }
+      }
+
+      for (const [campo, label] of Object.entries(TIEMPO_CHOLITO_OK_LABEL)) {
+        if (serv[TIEMPO_CHOLITO_ACTIVO_FIELD[campo]] !== true) continue
+        const real = serv[TIEMPO_CHOLITO_MIN_FIELD[campo]] as number | null
         push('SERVICIO', label, siNo(serv[campo] as boolean | null), real != null ? `${real} min` : '')
       }
     }

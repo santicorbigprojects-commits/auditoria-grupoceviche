@@ -2,18 +2,22 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import type { AuLocal, AuConfigTiempos, TipoTiempo } from '../../types'
 
-type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
+type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre' | 'sandwich' | 'jugos'
 
 const TIPOS: { tipo: TipoTiempo; key: TimeKey; label: string }[] = [
   { tipo: 'ENTRANTE',  key: 'entrante',  label: 'Entrante'        },
   { tipo: 'PRINCIPAL', key: 'principal', label: 'Plato principal' },
   { tipo: 'BEBIDA',    key: 'bebida',    label: 'Bebida'          },
   { tipo: 'POSTRE',    key: 'postre',    label: 'Postre'          },
+  { tipo: 'SANDWICH',  key: 'sandwich',  label: 'Sándwich (Cholito)' },
+  { tipo: 'JUGOS',     key: 'jugos',     label: 'Jugos (Cholito)'    },
 ]
 
 type ValoresMax = Record<TimeKey, string>
 
-const DEFAULTS_STR: ValoresMax = { entrante: '10', principal: '20', bebida: '5', postre: '10' }
+const DEFAULTS_STR: ValoresMax = {
+  entrante: '10', principal: '20', bebida: '5', postre: '10', sandwich: '10', jugos: '5',
+}
 
 interface LocalOverride {
   local_id:     string
@@ -90,6 +94,7 @@ export default function ConfigTiempos() {
   function toKey(tipo: string): TimeKey | null {
     const m: Record<string, TimeKey> = {
       ENTRANTE: 'entrante', PRINCIPAL: 'principal', BEBIDA: 'bebida', POSTRE: 'postre',
+      SANDWICH: 'sandwich', JUGOS: 'jugos',
     }
     return m[tipo] ?? null
   }
@@ -199,9 +204,10 @@ export default function ConfigTiempos() {
         </h3>
         <p className="text-xs text-navy/40 mb-5">
           Se aplican a todos los locales salvo que tengan un valor específico configurado abajo.
+          Sándwich y Jugos solo se evalúan en locales de marca Cholito.
         </p>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-5">
           {TIPOS.map(({ key, label }) => (
             <div key={key}>
               <label className="block text-xs font-semibold text-navy/50 uppercase tracking-wide mb-1.5">
@@ -277,7 +283,7 @@ export default function ConfigTiempos() {
               </select>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
               {TIPOS.map(({ key, label }) => (
                 <div key={key}>
                   <label className="block text-xs font-semibold text-navy/50 uppercase tracking-wide mb-1">

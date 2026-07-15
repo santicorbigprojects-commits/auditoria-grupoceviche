@@ -4,6 +4,7 @@ import ObservacionesEditor from './ObservacionesEditor'
 import EvidenciasUploader from './EvidenciasUploader'
 
 type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
+type TimeKeyCholito = 'sandwich' | 'jugos'
 
 const TIEMPOS: { key: TimeKey; label: string }[] = [
   { key: 'entrante',  label: 'Entrante' },
@@ -13,10 +14,12 @@ const TIEMPOS: { key: TimeKey; label: string }[] = [
 ]
 
 interface Props {
-  tiemposMax: Record<TimeKey, number>
+  tiemposMax: Record<TimeKey | TimeKeyCholito, number>
+  /** Solo el local de marca 'cholito' evalúa tiempo de sándwich/jugos. */
+  esCholito:  boolean
 }
 
-export default function SeccionServicio({ tiemposMax }: Props) {
+export default function SeccionServicio({ tiemposMax, esCholito }: Props) {
   const { servicio, setServicio, mesero_nombre, setMeseroNombre, oportunidad_servicio, setOportunidad } = useAuditoriaStore()
 
   function toggle(field: keyof ServicioDraft) {
@@ -24,6 +27,14 @@ export default function SeccionServicio({ tiemposMax }: Props) {
   }
 
   function setTiempoReal(key: TimeKey, val: string) {
+    const n    = val === '' ? null : Number(val)
+    const realK = `tiempo_${key}_min` as keyof ServicioDraft
+    const okK   = `tiempo_${key}_ok`  as keyof ServicioDraft
+    const ok    = n !== null ? n <= tiemposMax[key] : false
+    setServicio({ [realK]: n, [okK]: ok } as Partial<ServicioDraft>)
+  }
+
+  function setTiempoCholitoReal(key: TimeKeyCholito, val: string) {
     const n    = val === '' ? null : Number(val)
     const realK = `tiempo_${key}_min` as keyof ServicioDraft
     const okK   = `tiempo_${key}_ok`  as keyof ServicioDraft
@@ -76,49 +87,94 @@ export default function SeccionServicio({ tiemposMax }: Props) {
         <Item label="Barba / Maquillaje" checked={!!servicio.pres_barba_o_maquillaje} onToggle={() => toggle('pres_barba_o_maquillaje')} />
       </Group>
 
-      {/* Tiempos */}
-      <div className="mb-2">
-        <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide mb-3">
-          Tiempos de atención (minutos)
-        </p>
-        <div className="space-y-3">
-          {TIEMPOS.map(({ key, label }) => {
-            const realK = `tiempo_${key}_min` as keyof ServicioDraft
-            const okK   = `tiempo_${key}_ok`  as keyof ServicioDraft
-            const real  = servicio[realK] as number | null
-            const ok    = servicio[okK]   as boolean
-
-            return (
-              <div key={key} className="grid grid-cols-[auto_1fr_auto] gap-2 items-end">
-                <p className="text-xs text-navy/50 pb-1.5 w-28">{label}</p>
-                <div>
-                  <p className="text-xs text-navy/30 mb-1">
-                    Real <span className="text-navy/20">(máx {tiemposMax[key]} min)</span>
-                  </p>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    value={real ?? ''}
-                    onChange={e => setTiempoReal(key, e.target.value)}
-                    placeholder="min"
-                    className="w-full px-2 py-1.5 text-sm rounded-lg border border-navy/20 bg-white text-navy
-                               focus:outline-none focus:ring-2 focus:ring-ambar/30 placeholder:text-navy/20 transition"
-                  />
-                </div>
-                <div className="pb-1 flex items-center justify-center w-7">
-                  {real !== null
-                    ? ok
-                      ? <OkIcon ok />
-                      : <OkIcon ok={false} />
-                    : <span className="text-navy/20 text-xs">—</span>
-                  }
-                </div>
-              </div>
-            )
-          })}
+      {/* Tiempos base */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide">
+            Tiempos de atención (minutos)
+          </p>
+          <label className="flex items-center gap-2 text-xs text-navy/60 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={servicio.tiempos_base_activo}
+              onChange={() => setServicio({ tiempos_base_activo: !servicio.tiempos_base_activo })}
+              className="w-4 h-4 rounded border-navy/30 text-ambar focus:ring-ambar/40 cursor-pointer"
+            />
+            Evaluar tiempos de atención
+          </label>
         </div>
+
+        {servicio.tiempos_base_activo ? (
+          <div className="space-y-3">
+            {TIEMPOS.map(({ key, label }) => {
+              const realK = `tiempo_${key}_min` as keyof ServicioDraft
+              const okK   = `tiempo_${key}_ok`  as keyof ServicioDraft
+              const real  = servicio[realK] as number | null
+              const ok    = servicio[okK]   as boolean
+
+              return (
+                <div key={key} className="grid grid-cols-[auto_1fr_auto] gap-2 items-end">
+                  <p className="text-xs text-navy/50 pb-1.5 w-28">{label}</p>
+                  <div>
+                    <p className="text-xs text-navy/30 mb-1">
+                      Real <span className="text-navy/20">(máx {tiemposMax[key]} min)</span>
+                    </p>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      value={real ?? ''}
+                      onChange={e => setTiempoReal(key, e.target.value)}
+                      placeholder="min"
+                      className="w-full px-2 py-1.5 text-sm rounded-lg border border-navy/20 bg-white text-navy
+                                 focus:outline-none focus:ring-2 focus:ring-ambar/30 placeholder:text-navy/20 transition"
+                    />
+                  </div>
+                  <div className="pb-1 flex items-center justify-center w-7">
+                    {real !== null
+                      ? ok
+                        ? <OkIcon ok />
+                        : <OkIcon ok={false} />
+                      : <span className="text-navy/20 text-xs">—</span>
+                    }
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="text-xs text-navy/30 italic">
+            Tiempos de atención no evaluados en esta auditoría.
+          </p>
+        )}
       </div>
+
+      {/* Tiempos exclusivos de Cholito */}
+      {esCholito && (
+        <div className="mb-4 space-y-3">
+          <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide">
+            Tiempos adicionales — Cholito
+          </p>
+          <BloqueTiempoCholito
+            label="Tiempo de sándwich"
+            activo={servicio.tiempo_sandwich_activo}
+            onToggleActivo={() => setServicio({ tiempo_sandwich_activo: !servicio.tiempo_sandwich_activo })}
+            real={servicio.tiempo_sandwich_min}
+            ok={servicio.tiempo_sandwich_ok}
+            max={tiemposMax.sandwich}
+            onChangeReal={val => setTiempoCholitoReal('sandwich', val)}
+          />
+          <BloqueTiempoCholito
+            label="Tiempo de jugos"
+            activo={servicio.tiempo_jugos_activo}
+            onToggleActivo={() => setServicio({ tiempo_jugos_activo: !servicio.tiempo_jugos_activo })}
+            real={servicio.tiempo_jugos_min}
+            ok={servicio.tiempo_jugos_ok}
+            max={tiemposMax.jugos}
+            onChangeReal={val => setTiempoCholitoReal('jugos', val)}
+          />
+        </div>
+      )}
 
       <ObservacionesEditor area="SERVICIO" />
 
@@ -176,6 +232,62 @@ function Item({ label, checked, onToggle }: { label: string; checked: boolean; o
       </span>
       {label}
     </button>
+  )
+}
+
+function BloqueTiempoCholito({
+  label, activo, onToggleActivo, real, ok, max, onChangeReal,
+}: {
+  label:          string
+  activo:         boolean
+  onToggleActivo: () => void
+  real:           number | null
+  ok:             boolean
+  max:            number
+  onChangeReal:   (val: string) => void
+}) {
+  return (
+    <div className="rounded-xl border border-navy/10 bg-white p-3">
+      <label className="flex items-center gap-2 text-sm font-medium text-navy/70 cursor-pointer select-none mb-2">
+        <input
+          type="checkbox"
+          checked={activo}
+          onChange={onToggleActivo}
+          className="w-4 h-4 rounded border-navy/30 text-ambar focus:ring-ambar/40 cursor-pointer"
+        />
+        {label}
+      </label>
+
+      {activo ? (
+        <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+          <div>
+            <p className="text-xs text-navy/30 mb-1">
+              Real <span className="text-navy/20">(máx {max} min)</span>
+            </p>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={real ?? ''}
+              onChange={e => onChangeReal(e.target.value)}
+              placeholder="min"
+              className="w-full px-2 py-1.5 text-sm rounded-lg border border-navy/20 bg-white text-navy
+                         focus:outline-none focus:ring-2 focus:ring-ambar/30 placeholder:text-navy/20 transition"
+            />
+          </div>
+          <div className="pb-1 flex items-center justify-center w-7">
+            {real !== null
+              ? ok
+                ? <OkIcon ok />
+                : <OkIcon ok={false} />
+              : <span className="text-navy/20 text-xs">—</span>
+            }
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-navy/25 italic">Actívalo si aplica en esta visita.</p>
+      )}
+    </div>
   )
 }
 

@@ -52,9 +52,11 @@ function esAreaPrincipal(area: Area | AspectoRI): area is Area {
 
 type Vista = 'lista' | 'editando'
 type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
+type TimeKeyCholito = 'sandwich' | 'jugos'
+type TimeKeyAll = TimeKey | TimeKeyCholito
 
-const TIEMPOS_DEFAULT: Record<TimeKey, number> = {
-  entrante: 10, principal: 20, bebida: 5, postre: 10,
+const TIEMPOS_DEFAULT: Record<TimeKeyAll, number> = {
+  entrante: 10, principal: 20, bebida: 5, postre: 10, sandwich: 10, jugos: 5,
 }
 
 function pathFromUrl(url: string): string {
@@ -387,9 +389,10 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
   const [platosSeleccionados, setPlatosSeleccionados] = useState<Set<string>>(new Set())
   const [combosSeleccionados, setCombosSeleccionados] = useState<Set<string>>(new Set())
   const [slotPlatoElegido,    setSlotPlatoElegido]    = useState<Map<string, string>>(new Map())
-  const [tiemposMax,          setTiemposMax]          = useState<Record<TimeKey, number>>({ ...TIEMPOS_DEFAULT })
+  const [tiemposMax,          setTiemposMax]          = useState<Record<TimeKeyAll, number>>({ ...TIEMPOS_DEFAULT })
   const [configSev,           setConfigSev]           = useState<AuConfigSeveridad[]>([])
   const [configRI,            setConfigRI]            = useState<ConfigRI>(CONFIG_RI_DEFAULT)
+  const [esCholito,           setEsCholito]           = useState(false)
 
   const [guardando,    setGuardando]    = useState(false)
   const [guardadoOk,   setGuardadoOk]   = useState(false)
@@ -412,6 +415,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           { data: evidData  },
           { data: sevData   },
           { data: riData    },
+          { data: auLocalData },
           platosResult,
           combosResult,
           tiemposResult,
@@ -423,11 +427,13 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           supabase.from('au_evidencias').select('*').eq('auditoria_id', aid).range(0, 9999),
           supabase.from('au_config_severidad').select('*'),
           supabase.from('au_config_ri').select('*'),
+          supabase.from('au_locales').select('marca_id').eq('id', lid).maybeSingle(),
           cargarPlatos(lid),
           cargarCombos(lid),
           cargarTiempos(lid),
         ])
 
+        setEsCholito(auLocalData?.marca_id === 'cholito')
         if (sevData) setConfigSev(sevData)
         if (riData) {
           const merged = { ...CONFIG_RI_DEFAULT }
@@ -469,6 +475,15 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
           tiempo_principal_ok:     servData?.tiempo_principal_ok     ?? false,
           tiempo_bebida_ok:        servData?.tiempo_bebida_ok        ?? false,
           tiempo_postre_ok:        servData?.tiempo_postre_ok        ?? false,
+          // Retrocompatibilidad: auditorías viejas sin estos flags (NULL) →
+          // tiempos base activos, sándwich/jugos no aplica. Igual que en calculo.ts.
+          tiempos_base_activo:     servData?.tiempos_base_activo    !== false,
+          tiempo_sandwich_activo:  servData?.tiempo_sandwich_activo === true,
+          tiempo_jugos_activo:     servData?.tiempo_jugos_activo    === true,
+          tiempo_sandwich_min:     servData?.tiempo_sandwich_min     ?? null,
+          tiempo_jugos_min:        servData?.tiempo_jugos_min        ?? null,
+          tiempo_sandwich_ok:      servData?.tiempo_sandwich_ok      ?? false,
+          tiempo_jugos_ok:         servData?.tiempo_jugos_ok         ?? false,
         }
 
         const localChecklist: LocalDraft = {
@@ -615,15 +630,16 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
     }))
   }
 
-  async function cargarTiempos(lid: string): Promise<Record<TimeKey, number>> {
+  async function cargarTiempos(lid: string): Promise<Record<TimeKeyAll, number>> {
     const { data } = await supabase
       .from('au_config_tiempos')
       .select('*')
       .or(`local_id.is.null,local_id.eq.${lid}`)
     const rows: AuConfigTiempos[] = data ?? []
     const merged = { ...TIEMPOS_DEFAULT }
-    const tipoMap: Record<string, TimeKey> = {
+    const tipoMap: Record<string, TimeKeyAll> = {
       ENTRANTE: 'entrante', PRINCIPAL: 'principal', BEBIDA: 'bebida', POSTRE: 'postre',
+      SANDWICH: 'sandwich', JUGOS: 'jugos',
     }
     rows.filter(r => r.local_id === null).forEach(r => {
       const k = tipoMap[r.tipo]; if (k) merged[k] = r.max_min
@@ -910,7 +926,7 @@ function EditarAuditoria({ auditoria, localNombre, onBack }: EditarProps) {
             slotPlatoElegido={slotPlatoElegido}
             onElegirPlatoEnSlot={handleElegirPlatoEnSlot}
           />
-          <SeccionServicio tiemposMax={tiemposMax} />
+          <SeccionServicio tiemposMax={tiemposMax} esCholito={esCholito} />
           <SeccionLocal />
           <SeccionRevisionInterna />
 

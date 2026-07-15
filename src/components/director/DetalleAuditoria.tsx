@@ -23,10 +23,10 @@ import {
   type ConfigSeveridad,
 } from '../../lib/calculo'
 
-type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
+type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre' | 'sandwich' | 'jugos'
 
 const TIEMPOS_DEFAULT: Record<TimeKey, number> = {
-  entrante: 10, principal: 20, bebida: 5, postre: 10,
+  entrante: 10, principal: 20, bebida: 5, postre: 10, sandwich: 10, jugos: 5,
 }
 
 const CONFIG_SEV_DEFAULT: ConfigSeveridad = {
@@ -137,6 +137,7 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
     const merged = { ...TIEMPOS_DEFAULT }
     const tipoMap: Record<string, TimeKey> = {
       ENTRANTE: 'entrante', PRINCIPAL: 'principal', BEBIDA: 'bebida', POSTRE: 'postre',
+      SANDWICH: 'sandwich', JUGOS: 'jugos',
     }
     rows.filter(r => r.local_id === null).forEach(r => {
       const k = tipoMap[r.tipo]; if (k) merged[k] = r.max_min
@@ -355,13 +356,33 @@ export default function DetalleAuditoria({ auditoria, localNombre, obs, onClose 
                         <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide mb-3">
                           Tiempos de atención
                         </p>
-                        <div className="space-y-2.5">
-                          <TiempoRO label="Entrante"        real={servicio.tiempo_entrante_min}  max={tiemposMax.entrante}  ok={servicio.tiempo_entrante_ok} />
-                          <TiempoRO label="Plato principal" real={servicio.tiempo_principal_min} max={tiemposMax.principal} ok={servicio.tiempo_principal_ok} />
-                          <TiempoRO label="Bebida"          real={servicio.tiempo_bebida_min}    max={tiemposMax.bebida}   ok={servicio.tiempo_bebida_ok} />
-                          <TiempoRO label="Postre"          real={servicio.tiempo_postre_min}    max={tiemposMax.postre}   ok={servicio.tiempo_postre_ok} />
-                        </div>
+                        {servicio.tiempos_base_activo === false ? (
+                          <p className="text-sm text-navy/35 italic">Tiempos no evaluados en esta auditoría.</p>
+                        ) : (
+                          <div className="space-y-2.5">
+                            <TiempoRO label="Entrante"        real={servicio.tiempo_entrante_min}  max={tiemposMax.entrante}  ok={servicio.tiempo_entrante_ok} />
+                            <TiempoRO label="Plato principal" real={servicio.tiempo_principal_min} max={tiemposMax.principal} ok={servicio.tiempo_principal_ok} />
+                            <TiempoRO label="Bebida"          real={servicio.tiempo_bebida_min}    max={tiemposMax.bebida}   ok={servicio.tiempo_bebida_ok} />
+                            <TiempoRO label="Postre"          real={servicio.tiempo_postre_min}    max={tiemposMax.postre}   ok={servicio.tiempo_postre_ok} />
+                          </div>
+                        )}
                       </div>
+
+                      {(servicio.tiempo_sandwich_activo || servicio.tiempo_jugos_activo) && (
+                        <div className="mb-4">
+                          <p className="text-xs font-semibold text-navy/50 uppercase tracking-wide mb-3">
+                            Tiempos adicionales — Cholito
+                          </p>
+                          <div className="space-y-2.5">
+                            {servicio.tiempo_sandwich_activo && (
+                              <TiempoRO label="Sándwich" real={servicio.tiempo_sandwich_min} max={tiemposMax.sandwich} ok={servicio.tiempo_sandwich_ok} />
+                            )}
+                            {servicio.tiempo_jugos_activo && (
+                              <TiempoRO label="Jugos" real={servicio.tiempo_jugos_min} max={tiemposMax.jugos} ok={servicio.tiempo_jugos_ok} />
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <p className="text-sm text-navy/40 italic mb-4">Sin datos de servicio.</p>

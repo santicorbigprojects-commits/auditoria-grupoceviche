@@ -43,6 +43,15 @@ export interface ServicioDraft {
   tiempo_principal_ok:     boolean
   tiempo_bebida_ok:        boolean
   tiempo_postre_ok:        boolean
+  /** Activa/desactiva el bloque completo de los 4 tiempos base. */
+  tiempos_base_activo:     boolean
+  /** Solo se usan/muestran en locales de marca 'cholito'. */
+  tiempo_sandwich_activo:  boolean
+  tiempo_jugos_activo:     boolean
+  tiempo_sandwich_min:     number | null
+  tiempo_jugos_min:        number | null
+  tiempo_sandwich_ok:      boolean
+  tiempo_jugos_ok:         boolean
 }
 
 export interface LocalDraft {
@@ -73,6 +82,13 @@ const SERVICIO_INICIAL: ServicioDraft = {
   tiempo_principal_ok:     false,
   tiempo_bebida_ok:        false,
   tiempo_postre_ok:        false,
+  tiempos_base_activo:     true,
+  tiempo_sandwich_activo:  false,
+  tiempo_jugos_activo:     false,
+  tiempo_sandwich_min:     null,
+  tiempo_jugos_min:        null,
+  tiempo_sandwich_ok:      false,
+  tiempo_jugos_ok:         false,
 }
 
 const LOCAL_INICIAL: LocalDraft = {

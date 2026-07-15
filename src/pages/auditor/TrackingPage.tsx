@@ -33,9 +33,11 @@ function esAreaPrincipal(area: Area | AspectoRI): area is Area {
 }
 
 type TimeKey = 'entrante' | 'principal' | 'bebida' | 'postre'
+type TimeKeyCholito = 'sandwich' | 'jugos'
+type TimeKeyAll = TimeKey | TimeKeyCholito
 
-const TIEMPOS_DEFAULT: Record<TimeKey, number> = {
-  entrante: 10, principal: 20, bebida: 5, postre: 10,
+const TIEMPOS_DEFAULT: Record<TimeKeyAll, number> = {
+  entrante: 10, principal: 20, bebida: 5, postre: 10, sandwich: 10, jugos: 5,
 }
 
 interface Grupo { marca: AuMarca; locales: AuLocal[] }
@@ -57,7 +59,7 @@ export default function TrackingPage() {
   const [loadingPlatos, setLoadingPlatos] = useState(false)
 
   // Tiempos objetivo cargados de au_config_tiempos
-  const [tiemposMax, setTiemposMax] = useState<Record<TimeKey, number>>({ ...TIEMPOS_DEFAULT })
+  const [tiemposMax, setTiemposMax] = useState<Record<TimeKeyAll, number>>({ ...TIEMPOS_DEFAULT })
 
   // Selección del auditor este turno
   const [platosSeleccionados, setPlatosSeleccionados] = useState<Set<string>>(new Set())
@@ -128,8 +130,9 @@ export default function TrackingPage() {
         .or(`local_id.is.null,local_id.eq.${store.local_id}`)
       const rows: AuConfigTiempos[] = data ?? []
       const merged = { ...TIEMPOS_DEFAULT }
-      const tipoMap: Record<string, TimeKey> = {
+      const tipoMap: Record<string, TimeKeyAll> = {
         ENTRANTE: 'entrante', PRINCIPAL: 'principal', BEBIDA: 'bebida', POSTRE: 'postre',
+        SANDWICH: 'sandwich', JUGOS: 'jugos',
       }
       rows.filter(r => r.local_id === null).forEach(r => { const k = tipoMap[r.tipo]; if (k) merged[k] = r.max_min })
       rows.filter(r => r.local_id === store.local_id).forEach(r => { const k = tipoMap[r.tipo]; if (k) merged[k] = r.max_min })
@@ -267,6 +270,10 @@ export default function TrackingPage() {
   const obsRI: ObservacionRI[] = store.observaciones
     .filter(o => !esAreaPrincipal(o.area))
     .map(o => ({ aspecto: o.area as AspectoRI, severidad: o.severidad }))
+
+  /* ── Marca del local seleccionado (Cholito habilita tiempos extra) ──── */
+  const localSeleccionado = locales.find(l => l.id === store.local_id)
+  const esCholito = localSeleccionado?.marca_id === 'cholito'
 
   /* ── Notas en vivo ──────────────────────────────────────────────────── */
   const notaP = calcularNotaProducto(store.productoItems, obsPrincipales, cfgMap)
@@ -494,7 +501,7 @@ export default function TrackingPage() {
                   slotPlatoElegido={slotPlatoElegido}
                   onElegirPlatoEnSlot={handleElegirPlatoEnSlot}
                 />
-                <SeccionServicio tiemposMax={tiemposMax} />
+                <SeccionServicio tiemposMax={tiemposMax} esCholito={esCholito} />
                 <SeccionLocal />
                 <SeccionRevisionInterna />
               </>

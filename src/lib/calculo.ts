@@ -21,6 +21,13 @@ export interface ItemServicio {
   tiempo_principal_ok:     boolean | null
   tiempo_bebida_ok:        boolean | null
   tiempo_postre_ok:        boolean | null
+  /** Activa/desactiva el bloque completo de los 4 tiempos base. NULL/undefined (auditorías viejas) = activo. */
+  tiempos_base_activo:     boolean | null
+  /** Solo locales marca 'cholito'. NULL/undefined (auditorías viejas) = no aplica. */
+  tiempo_sandwich_activo:  boolean | null
+  tiempo_jugos_activo:     boolean | null
+  tiempo_sandwich_ok:      boolean | null
+  tiempo_jugos_ok:         boolean | null
 }
 
 export interface ItemLocal {
@@ -108,20 +115,43 @@ export function calcularNotaProducto(
   return aplicarDescuentosArea(base, obs, 'PRODUCTO', config)
 }
 
-const SERVICIO_CAMPOS: (keyof ItemServicio)[] = [
+const SERVICIO_CAMPOS_BASE: (keyof ItemServicio)[] = [
   'fid_speech', 'fid_nombre_camarero', 'fid_tarjeta',
   'ups_bebidas', 'ups_meta_dia',
   'pres_uniformes', 'pres_cabellos', 'pres_unas', 'pres_zapatos', 'pres_barba_o_maquillaje',
-  'tiempo_entrante_ok', 'tiempo_principal_ok', 'tiempo_bebida_ok', 'tiempo_postre_ok',
-]  // 14 ítems
+]  // 10 ítems, siempre cuentan
 
+const SERVICIO_CAMPOS_TIEMPOS_BASE: (keyof ItemServicio)[] = [
+  'tiempo_entrante_ok', 'tiempo_principal_ok', 'tiempo_bebida_ok', 'tiempo_postre_ok',
+]  // 4 ítems, cuentan si el bloque de tiempos base está activo
+
+/*
+ * Denominador variable: checks_aplicables = 10 base
+ *   + 4 si tiempos_base_activo (bloque de tiempos base ENTRANTE/PRINCIPAL/BEBIDA/POSTRE)
+ *   + 1 si tiempo_sandwich_activo (solo Cholito)
+ *   + 1 si tiempo_jugos_activo    (solo Cholito)
+ *
+ * Retrocompatibilidad: auditorías guardadas antes de este cambio no tienen estos
+ * flags (NULL/undefined). tiempos_base_activo se trata como activo por defecto
+ * (=> denominador 14, igual que antes). tiempo_sandwich_activo/tiempo_jugos_activo
+ * se tratan como "no aplica" por defecto (nunca se sumaban antes de que existieran).
+ */
 export function calcularNotaServicio(
   srv:    Partial<ItemServicio>,
   obs:    ObservacionCalculo[],
   config: ConfigSeveridad = DEFAULT_CONFIG,
 ): number {
-  const trues = SERVICIO_CAMPOS.filter(k => srv[k] === true).length
-  const base  = (trues / 14) * AREA_MAX
+  const camposAplicables: (keyof ItemServicio)[] = [...SERVICIO_CAMPOS_BASE]
+
+  if (srv.tiempos_base_activo !== false) camposAplicables.push(...SERVICIO_CAMPOS_TIEMPOS_BASE)
+  if (srv.tiempo_sandwich_activo === true) camposAplicables.push('tiempo_sandwich_ok')
+  if (srv.tiempo_jugos_activo    === true) camposAplicables.push('tiempo_jugos_ok')
+
+  const aplicables = camposAplicables.length
+  const trues = camposAplicables.filter(k => srv[k] === true).length
+  // Defensivo: aplicables === 0 es imposible en la práctica (BASE siempre aporta 10).
+  const base = aplicables === 0 ? AREA_MAX : (trues / aplicables) * AREA_MAX
+
   return aplicarDescuentosArea(base, obs, 'SERVICIO', config)
 }
 

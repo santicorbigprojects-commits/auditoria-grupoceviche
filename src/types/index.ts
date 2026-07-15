@@ -104,7 +104,7 @@ export interface AuAuditoriaProductoItem {
   slot_nombre:        string | null  // null = plato suelto
 }
 
-export type TipoTiempo = 'ENTRANTE' | 'PRINCIPAL' | 'BEBIDA' | 'POSTRE'
+export type TipoTiempo = 'ENTRANTE' | 'PRINCIPAL' | 'BEBIDA' | 'POSTRE' | 'SANDWICH' | 'JUGOS'
 
 export interface AuConfigTiempos {
   id:       string
@@ -134,6 +134,13 @@ export interface AuAuditoriaServicio {
   tiempo_principal_ok:     boolean | null
   tiempo_bebida_ok:        boolean | null
   tiempo_postre_ok:        boolean | null
+  tiempos_base_activo:     boolean | null
+  tiempo_sandwich_activo:  boolean | null
+  tiempo_jugos_activo:     boolean | null
+  tiempo_sandwich_min:     number | null
+  tiempo_jugos_min:        number | null
+  tiempo_sandwich_ok:      boolean | null
+  tiempo_jugos_ok:         boolean | null
 }
 
 export interface AuAuditoriaLocal {
