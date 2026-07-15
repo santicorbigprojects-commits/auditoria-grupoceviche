@@ -1,17 +1,24 @@
 import { useState } from 'react'
 import SidebarLayout, { type NavItem } from '../../components/ui/SidebarLayout'
+import ResultadoGeneralPage from '../ResultadoGeneralPage'
 import TrackingPage        from './TrackingPage'
 import CalendarioPage      from './CalendarioPage'
 import ConfiguracionPage   from './ConfiguracionPage'
 import MisAuditoriasPage   from './MisAuditoriasPage'
 import AccionesMejoraPage  from '../AccionesMejoraPage'
 
-type Tab = 'tracking' | 'historial' | 'acciones' | 'calendario' | 'config'
+type Tab = 'resultado' | 'tracking' | 'historial' | 'acciones' | 'calendario' | 'config'
 
 export default function AuditorPage() {
-  const [tab, setTab] = useState<Tab>('tracking')
+  const [tab, setTab] = useState<Tab>('resultado')
 
   const navItems: NavItem[] = [
+    {
+      label:   'Resultado general',
+      icon:    <IconResultado />,
+      onClick: () => setTab('resultado'),
+      active:  tab === 'resultado',
+    },
     {
       label:   'Nueva auditoría',
       icon:    <IconTracking />,
@@ -46,12 +53,22 @@ export default function AuditorPage() {
 
   return (
     <SidebarLayout navItems={navItems}>
+      {tab === 'resultado'  && <ResultadoGeneralPage />}
       {tab === 'tracking'   && <TrackingPage />}
       {tab === 'historial'  && <MisAuditoriasPage />}
       {tab === 'acciones'   && <AccionesMejoraPage />}
       {tab === 'calendario' && <CalendarioPage />}
       {tab === 'config'     && <ConfiguracionPage />}
     </SidebarLayout>
+  )
+}
+
+function IconResultado() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    </svg>
   )
 }
 

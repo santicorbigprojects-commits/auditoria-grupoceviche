@@ -7,8 +7,9 @@ import DetalleAuditoria from '../../components/director/DetalleAuditoria'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { eliminarAuditoria } from '../../lib/eliminarAuditoria'
 import AccionesMejoraPage from '../AccionesMejoraPage'
+import ResultadoGeneralPage from '../ResultadoGeneralPage'
 
-type Tab = 'historial' | 'acciones'
+type Tab = 'resultado' | 'historial' | 'acciones'
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 function semColor(nota: number) {
@@ -23,7 +24,7 @@ interface LatestAud { fecha: string; nota_total: number }
 export default function DirectorPage() {
   const { cut, rol } = useAuthStore()
 
-  const [tab, setTab] = useState<Tab>('historial')
+  const [tab, setTab] = useState<Tab>('resultado')
 
   const [locales,       setLocales]       = useState<AuLocal[]>([])
   const [marcas,        setMarcas]        = useState<AuMarca[]>([])
@@ -155,6 +156,12 @@ export default function DirectorPage() {
 
   const navItems: NavItem[] = [
     {
+      label:   'Resultado general',
+      icon:    <IconResultado />,
+      onClick: () => setTab('resultado'),
+      active:  tab === 'resultado',
+    },
+    {
       label:   'Historial',
       icon:    <IconHistorial />,
       onClick: () => setTab('historial'),
@@ -179,7 +186,9 @@ export default function DirectorPage() {
 
   return (
     <SidebarLayout navItems={navItems}>
-      {tab === 'acciones' ? (
+      {tab === 'resultado' ? (
+        <ResultadoGeneralPage />
+      ) : tab === 'acciones' ? (
         <AccionesMejoraPage />
       ) : (
       <div className="p-6 max-w-6xl mx-auto">
@@ -393,6 +402,15 @@ export default function DirectorPage() {
         />
       )}
     </SidebarLayout>
+  )
+}
+
+function IconResultado() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M3 3h8v8H3V3zm10 0h8v5h-8V3zm0 8h8v10h-8V11zM3 14h8v7H3v-7z" />
+    </svg>
   )
 }
 

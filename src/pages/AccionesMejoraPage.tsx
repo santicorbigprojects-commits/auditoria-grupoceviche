@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import type {
-  AuObservacion, AuAuditoria, AuLocal, AuAccionMejora,
+  AuObservacion, AuAuditoria, AuLocal, AuAccionMejora, AuDirectorLocal,
   AreaObservacion, Severidad, ExtremaModo,
 } from '../types'
 
@@ -41,10 +41,11 @@ const MODO_LABEL: Record<ExtremaModo, string> = {
 type EstadoFiltro = 'TODAS' | 'PENDIENTES' | 'RESUELTAS'
 
 interface FilaData {
-  observacion: AuObservacion
-  auditoria:   AuAuditoria
-  localNombre: string
-  accion:      AuAccionMejora | null
+  observacion:    AuObservacion
+  auditoria:      AuAuditoria
+  localNombre:    string
+  directorNombre: string
+  accion:         AuAccionMejora | null
 }
 
 function fechaCorta(fecha: string): string {
@@ -67,9 +68,11 @@ export default function AccionesMejoraPage() {
   const [error,   setError]   = useState<string | null>(null)
   const [filas,   setFilas]   = useState<FilaData[]>([])
   const [locales, setLocales] = useState<AuLocal[]>([])
+  const [directorPorLocal, setDirectorPorLocal] = useState<Record<string, string>>({})
 
-  const [filtroLocal,  setFiltroLocal]  = useState<string>('TODOS')
-  const [filtroEstado, setFiltroEstado] = useState<EstadoFiltro>('TODAS')
+  const [filtroLocal,    setFiltroLocal]    = useState<string>('TODOS')
+  const [filtroEstado,   setFiltroEstado]   = useState<EstadoFiltro>('TODAS')
+  const [filtroDirector, setFiltroDirector] = useState<string>('TODOS')
 
   useEffect(() => {
     load()
@@ -103,6 +106,34 @@ export default function AccionesMejoraPage() {
       setLocales(localesList)
 
       if (localIds.length === 0) { setFilas([]); return }
+
+      // 1b. Director de cada local (au_director_locales → au_usuarios)
+      const { data: dlData, error: eDl } = await supabase
+        .from('au_director_locales')
+        .select('*')
+        .in('local_id', localIds)
+      if (eDl) throw eDl
+      const directorLocales = (dlData ?? []) as AuDirectorLocal[]
+
+      const directorCuts = Array.from(new Set(directorLocales.map(d => d.director_cut)))
+      const directorNombreMap: Record<string, string> = {}
+      if (directorCuts.length > 0) {
+        const { data: usersData, error: eUs } = await supabase
+          .from('au_usuarios')
+          .select('cut, nombre')
+          .in('cut', directorCuts)
+        if (eUs) throw eUs
+        ;(usersData ?? []).forEach((u: { cut: string; nombre: string }) => {
+          directorNombreMap[u.cut] = u.nombre
+        })
+      }
+
+      const localDirectorMap: Record<string, string> = {}
+      directorLocales.forEach(dl => {
+        const nombre = directorNombreMap[dl.director_cut]
+        if (nombre) localDirectorMap[dl.local_id] = nombre
+      })
+      setDirectorPorLocal(localDirectorMap)
 
       // 2. Auditorías de esos locales
       const { data: auds, error: e1 } = await supabase
@@ -148,10 +179,11 @@ export default function AccionesMejoraPage() {
           const aud = auditoriaMap[o.auditoria_id]
           if (!aud) return null
           return {
-            observacion: o,
-            auditoria:   aud,
-            localNombre: localMap[aud.local_id] ?? '—',
-            accion:      accionesMap[o.id] ?? null,
+            observacion:    o,
+            auditoria:      aud,
+            localNombre:    localMap[aud.local_id] ?? '—',
+            directorNombre: localDirectorMap[aud.local_id] ?? '—',
+            accion:         accionesMap[o.id] ?? null,
           }
         })
         .filter((r): r is FilaData => r !== null)
@@ -166,14 +198,19 @@ export default function AccionesMejoraPage() {
     }
   }
 
+  const directores = useMemo(() => {
+    return Array.from(new Set(Object.values(directorPorLocal))).sort((a, b) => a.localeCompare(b))
+  }, [directorPorLocal])
+
   const filasFiltradas = useMemo(() => {
     return filas.filter(f => {
-      if (filtroLocal !== 'TODOS' && f.auditoria.local_id !== filtroLocal) return false
+      if (filtroLocal    !== 'TODOS' && f.auditoria.local_id !== filtroLocal) return false
+      if (filtroDirector !== 'TODOS' && f.directorNombre     !== filtroDirector) return false
       if (filtroEstado === 'PENDIENTES' && f.accion?.resuelto) return false
       if (filtroEstado === 'RESUELTAS'  && !f.accion?.resuelto) return false
       return true
     })
-  }, [filas, filtroLocal, filtroEstado])
+  }, [filas, filtroLocal, filtroDirector, filtroEstado])
 
   function handleAccionGuardada(observacionId: string, accion: AuAccionMejora) {
     setFilas(prev => prev.map(f => f.observacion.id === observacionId ? { ...f, accion } : f))
@@ -223,6 +260,16 @@ export default function AccionesMejoraPage() {
           {locales.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
         </select>
 
+        <select
+          value={filtroDirector}
+          onChange={e => setFiltroDirector(e.target.value)}
+          className="px-3 py-2 rounded-xl border border-navy/20 bg-white text-navy text-sm
+                     focus:outline-none focus:ring-2 focus:ring-naranja/40 focus:border-naranja transition"
+        >
+          <option value="TODOS">Todos los directores</option>
+          {directores.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+
         <div className="flex rounded-xl border border-navy/20 overflow-hidden">
           {(['TODAS', 'PENDIENTES', 'RESUELTAS'] as EstadoFiltro[]).map(estado => (
             <button
@@ -250,11 +297,12 @@ export default function AccionesMejoraPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-navy/10 shadow-sm overflow-x-auto">
-          <table className="w-full text-sm min-w-[1150px]">
+          <table className="w-full text-sm min-w-[1280px]">
             <thead>
               <tr className="border-b border-navy/10">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Fecha auditoría</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Local</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Director</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Área</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide min-w-[200px]">Observación</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Severidad</th>
@@ -291,7 +339,7 @@ function FilaObservacion({
   puedeEditar: boolean
   onGuardado:  (accion: AuAccionMejora) => void
 }) {
-  const { observacion: o, auditoria: a, localNombre, accion } = data
+  const { observacion: o, auditoria: a, localNombre, directorNombre, accion } = data
 
   const [accionTexto, setAccionTexto] = useState(accion?.accion ?? '')
   const [fechaEval,   setFechaEval]   = useState(accion?.fecha_evaluacion ?? '')
@@ -348,6 +396,7 @@ function FilaObservacion({
     <tr className="hover:bg-navy/[0.03] transition-colors align-top">
       <td className="px-4 py-3 text-navy/70 whitespace-nowrap">{fechaCorta(a.fecha)}</td>
       <td className="px-4 py-3 text-navy/70 max-w-[160px] truncate" title={localNombre}>{localNombre}</td>
+      <td className="px-4 py-3 text-navy/70 max-w-[160px] truncate" title={directorNombre}>{directorNombre}</td>
       <td className="px-4 py-3 text-navy/70 whitespace-nowrap">{AREA_LABEL[o.area]}</td>
       <td className="px-4 py-3 text-navy/70 min-w-[200px]">
         <p className="leading-relaxed">{o.texto}</p>
