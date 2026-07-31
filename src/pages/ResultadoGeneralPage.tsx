@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import type { AuLocal, AuDirectorLocal } from '../types'
+import type { AuLocal, AuDirectorLocal, EstadoCualitativo } from '../types'
+
+type Tab = 'calidad' | 'seguridad'
 
 /* ── Semáforo (mismos cortes que DirectorPage) ────────────────────────────── */
 function semColor(nota: number) {
@@ -9,16 +11,39 @@ function semColor(nota: number) {
   return               { dot: 'bg-terranova', badge: 'bg-terranova/10 text-terranova' }
 }
 
+const ESTADO_SA_BADGE: Record<EstadoCualitativo, string> = {
+  CORRECTO:   'bg-green-100 text-green-700',
+  MEJORA:     'bg-ambar/15 text-ambar',
+  DEFICIENTE: 'bg-terranova/10 text-terranova',
+}
+const ESTADO_SA_DOT: Record<EstadoCualitativo, string> = {
+  CORRECTO:   'bg-green-500',
+  MEJORA:     'bg-ambar',
+  DEFICIENTE: 'bg-terranova',
+}
+const ESTADO_SA_LABEL: Record<EstadoCualitativo, string> = {
+  CORRECTO:   'Correcto',
+  MEJORA:     'Mejora',
+  DEFICIENTE: 'Deficiente',
+}
+
 interface LatestAud {
   fecha:      string
   nota_total: number
   creado_en:  string
 }
 
+interface LatestSA {
+  fecha:         string
+  estado_global: EstadoCualitativo
+  creado_en:     string
+}
+
 interface FilaLocal {
   local:          AuLocal
   directorNombre: string
   latest:         LatestAud | null
+  latestSA:       LatestSA  | null
 }
 
 function fechaCorta(fecha: string): string {
@@ -36,8 +61,10 @@ export default function ResultadoGeneralPage() {
   const [locales,          setLocales]          = useState<AuLocal[]>([])
   const [directorPorLocal, setDirectorPorLocal] = useState<Record<string, string>>({})
   const [latestByLocal,    setLatestByLocal]    = useState<Record<string, LatestAud>>({})
+  const [latestSAByLocal,  setLatestSAByLocal]  = useState<Record<string, LatestSA>>({})
 
   const [filtroDirector, setFiltroDirector] = useState<string>('TODOS')
+  const [tab, setTab] = useState<Tab>('calidad')
 
   useEffect(() => {
     load()
@@ -100,6 +127,23 @@ export default function ResultadoGeneralPage() {
         }
       }
       setLatestByLocal(latest)
+
+      // 4. Evaluaciones de seguridad alimentaria, quedarse con la más reciente por local
+      const { data: evsSA, error: eSA } = await supabase
+        .from('au_sa_evaluaciones')
+        .select('local_id, fecha, estado_global, creado_en')
+        .order('fecha', { ascending: false })
+        .order('creado_en', { ascending: false })
+        .range(0, 9999)
+      if (eSA) throw eSA
+
+      const latestSA: Record<string, LatestSA> = {}
+      for (const e of (evsSA ?? [])) {
+        if (e.estado_global !== null && !latestSA[e.local_id]) {
+          latestSA[e.local_id] = { fecha: e.fecha, estado_global: e.estado_global, creado_en: e.creado_en }
+        }
+      }
+      setLatestSAByLocal(latestSA)
     } catch (err) {
       console.error(err)
       setError('Error cargando el resultado general. Intenta de nuevo.')
@@ -119,8 +163,9 @@ export default function ResultadoGeneralPage() {
         local:          l,
         directorNombre: directorPorLocal[l.id] ?? '—',
         latest:         latestByLocal[l.id] ?? null,
+        latestSA:       latestSAByLocal[l.id] ?? null,
       }))
-  }, [locales, directorPorLocal, latestByLocal, filtroDirector])
+  }, [locales, directorPorLocal, latestByLocal, latestSAByLocal, filtroDirector])
 
   const { promedio, auditados, total } = useMemo(() => {
     const conNota = filas.filter(f => f.latest !== null)
@@ -129,6 +174,16 @@ export default function ResultadoGeneralPage() {
       promedio:  conNota.length > 0 ? suma / conNota.length : null,
       auditados: conNota.length,
       total:     filas.length,
+    }
+  }, [filas])
+
+  const { correctosSA, mejoraSA, deficientesSA, evaluadosSA } = useMemo(() => {
+    const conSA = filas.filter(f => f.latestSA !== null)
+    return {
+      correctosSA:   conSA.filter(f => f.latestSA!.estado_global === 'CORRECTO').length,
+      mejoraSA:      conSA.filter(f => f.latestSA!.estado_global === 'MEJORA').length,
+      deficientesSA: conSA.filter(f => f.latestSA!.estado_global === 'DEFICIENTE').length,
+      evaluadosSA:   conSA.length,
     }
   }, [filas])
 
@@ -149,8 +204,32 @@ export default function ResultadoGeneralPage() {
           Resultado general
         </h2>
         <p className="text-sm text-navy/40 mt-0.5">
-          Nota promedio del grupo, calculada con la última auditoría de cada local.
+          {tab === 'calidad'
+            ? 'Nota promedio del grupo, calculada con la última auditoría de cada local.'
+            : 'Estado de seguridad alimentaria de cada local, según su última evaluación.'}
         </p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6 border-b border-navy/10">
+        <button
+          type="button"
+          onClick={() => setTab('calidad')}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+            tab === 'calidad' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
+          }`}
+        >
+          Calidad
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('seguridad')}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+            tab === 'seguridad' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
+          }`}
+        >
+          Seguridad alimentaria
+        </button>
       </div>
 
       {error && (
@@ -163,95 +242,186 @@ export default function ResultadoGeneralPage() {
         </div>
       )}
 
-      {/* Nota general destacada */}
-      <div className="bg-white rounded-2xl border border-navy/10 shadow-sm p-8 mb-6 text-center">
-        {promedio === null ? (
-          <>
-            <p className="text-4xl font-bold text-navy/25" style={{ fontFamily: 'Poppins, sans-serif' }}>—</p>
-            <p className="text-sm text-navy/40 mt-2">Aún no hay locales auditados.</p>
-          </>
-        ) : (
-          <>
-            <p
-              className={`text-6xl font-bold tabular-nums ${col!.badge.split(' ')[1]}`}
-              style={{ fontFamily: 'Poppins, sans-serif' }}
+      {tab === 'calidad' ? (
+        <>
+          {/* Nota general destacada */}
+          <div className="bg-white rounded-2xl border border-navy/10 shadow-sm p-8 mb-6 text-center">
+            {promedio === null ? (
+              <>
+                <p className="text-4xl font-bold text-navy/25" style={{ fontFamily: 'Poppins, sans-serif' }}>—</p>
+                <p className="text-sm text-navy/40 mt-2">Aún no hay locales auditados.</p>
+              </>
+            ) : (
+              <>
+                <p
+                  className={`text-6xl font-bold tabular-nums ${col!.badge.split(' ')[1]}`}
+                  style={{ fontFamily: 'Poppins, sans-serif' }}
+                >
+                  {promedio.toFixed(2)}
+                  <span className="text-2xl font-normal opacity-50"> / 20</span>
+                </p>
+                <p className="text-sm text-navy/40 mt-3">
+                  Promedio de {auditados} {auditados === 1 ? 'local auditado' : 'locales auditados'} de {total}
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* Filtro por director */}
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <select
+              value={filtroDirector}
+              onChange={e => setFiltroDirector(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-navy/20 bg-white text-navy text-sm
+                         focus:outline-none focus:ring-2 focus:ring-naranja/40 focus:border-naranja transition"
             >
-              {promedio.toFixed(2)}
-              <span className="text-2xl font-normal opacity-50"> / 20</span>
-            </p>
-            <p className="text-sm text-navy/40 mt-3">
-              Promedio de {auditados} {auditados === 1 ? 'local auditado' : 'locales auditados'} de {total}
-            </p>
-          </>
-        )}
-      </div>
+              <option value="TODOS">Todos los directores</option>
+              {directores.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
 
-      {/* Filtro por director */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <select
-          value={filtroDirector}
-          onChange={e => setFiltroDirector(e.target.value)}
-          className="px-3 py-2 rounded-xl border border-navy/20 bg-white text-navy text-sm
-                     focus:outline-none focus:ring-2 focus:ring-naranja/40 focus:border-naranja transition"
-        >
-          <option value="TODOS">Todos los directores</option>
-          {directores.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
+            <span className="text-xs text-navy/35 ml-auto">
+              {filas.length} {filas.length === 1 ? 'local' : 'locales'}
+            </span>
+          </div>
 
-        <span className="text-xs text-navy/35 ml-auto">
-          {filas.length} {filas.length === 1 ? 'local' : 'locales'}
-        </span>
-      </div>
-
-      {/* Tabla de locales */}
-      {filas.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-navy/15 p-10 text-center">
-          <p className="text-navy/30 text-sm">No hay locales que coincidan con el filtro.</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-navy/10 shadow-sm overflow-x-auto">
-          <table className="w-full text-sm min-w-[600px]">
-            <thead>
-              <tr className="border-b border-navy/10">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Local</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Director</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Última nota</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Fecha</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-navy/5">
-              {filas.map(f => {
-                const fCol = f.latest ? semColor(f.latest.nota_total) : null
-                return (
-                  <tr key={f.local.id} className={`hover:bg-navy/[0.03] transition-colors ${!f.latest ? 'opacity-60' : ''}`}>
-                    <td className="px-4 py-3 text-navy font-medium max-w-[220px] truncate" title={f.local.nombre}>
-                      {f.local.nombre}
-                    </td>
-                    <td className="px-4 py-3 text-navy/70 max-w-[160px] truncate" title={f.directorNombre}>
-                      {f.directorNombre}
-                    </td>
-                    <td className="px-4 py-3">
-                      {f.latest ? (
-                        <span className={`inline-flex items-baseline gap-0.5 px-2.5 py-1 rounded-lg text-sm font-bold tabular-nums w-fit ${fCol!.badge}`}>
-                          {f.latest.nota_total.toFixed(1)}
-                          <span className="text-xs font-normal opacity-60">/20</span>
-                        </span>
-                      ) : (
-                        <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-lg bg-navy/5 text-navy/35">
-                          No auditado
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-navy/60 whitespace-nowrap">
-                      {f.latest ? fechaCorta(f.latest.fecha) : <span className="text-navy/25">—</span>}
-                    </td>
+          {/* Tabla de locales */}
+          {filas.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-navy/15 p-10 text-center">
+              <p className="text-navy/30 text-sm">No hay locales que coincidan con el filtro.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-navy/10 shadow-sm overflow-x-auto">
+              <table className="w-full text-sm min-w-[600px]">
+                <thead>
+                  <tr className="border-b border-navy/10">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Local</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Director</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Última nota</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Fecha</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="divide-y divide-navy/5">
+                  {filas.map(f => {
+                    const fCol = f.latest ? semColor(f.latest.nota_total) : null
+                    return (
+                      <tr key={f.local.id} className={`hover:bg-navy/[0.03] transition-colors ${!f.latest ? 'opacity-60' : ''}`}>
+                        <td className="px-4 py-3 text-navy font-medium max-w-[220px] truncate" title={f.local.nombre}>
+                          {f.local.nombre}
+                        </td>
+                        <td className="px-4 py-3 text-navy/70 max-w-[160px] truncate" title={f.directorNombre}>
+                          {f.directorNombre}
+                        </td>
+                        <td className="px-4 py-3">
+                          {f.latest ? (
+                            <span className={`inline-flex items-baseline gap-0.5 px-2.5 py-1 rounded-lg text-sm font-bold tabular-nums w-fit ${fCol!.badge}`}>
+                              {f.latest.nota_total.toFixed(1)}
+                              <span className="text-xs font-normal opacity-60">/20</span>
+                            </span>
+                          ) : (
+                            <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-lg bg-navy/5 text-navy/35">
+                              No auditado
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-navy/60 whitespace-nowrap">
+                          {f.latest ? fechaCorta(f.latest.fecha) : <span className="text-navy/25">—</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Conteo global de seguridad alimentaria */}
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <StatCardSA label="Correctos"        valor={correctosSA}   cls="text-green-600" />
+            <StatCardSA label="Mejora necesaria"  valor={mejoraSA}      cls="text-ambar" />
+            <StatCardSA label="Deficientes"       valor={deficientesSA} cls="text-terranova" />
+          </div>
+          <p className="text-xs text-navy/35 text-center -mt-3 mb-6">
+            De {evaluadosSA} {evaluadosSA === 1 ? 'local evaluado' : 'locales evaluados'} de {filas.length}
+          </p>
+
+          {/* Filtro por director */}
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <select
+              value={filtroDirector}
+              onChange={e => setFiltroDirector(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-navy/20 bg-white text-navy text-sm
+                         focus:outline-none focus:ring-2 focus:ring-naranja/40 focus:border-naranja transition"
+            >
+              <option value="TODOS">Todos los directores</option>
+              {directores.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+
+            <span className="text-xs text-navy/35 ml-auto">
+              {filas.length} {filas.length === 1 ? 'local' : 'locales'}
+            </span>
+          </div>
+
+          {/* Tabla de locales */}
+          {filas.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-navy/15 p-10 text-center">
+              <p className="text-navy/30 text-sm">No hay locales que coincidan con el filtro.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-navy/10 shadow-sm overflow-x-auto">
+              <table className="w-full text-sm min-w-[600px]">
+                <thead>
+                  <tr className="border-b border-navy/10">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Local</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Director</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Estado</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Fecha</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-navy/5">
+                  {filas.map(f => (
+                    <tr key={f.local.id} className={`hover:bg-navy/[0.03] transition-colors ${!f.latestSA ? 'opacity-60' : ''}`}>
+                      <td className="px-4 py-3 text-navy font-medium max-w-[220px] truncate" title={f.local.nombre}>
+                        {f.local.nombre}
+                      </td>
+                      <td className="px-4 py-3 text-navy/70 max-w-[160px] truncate" title={f.directorNombre}>
+                        {f.directorNombre}
+                      </td>
+                      <td className="px-4 py-3">
+                        {f.latestSA ? (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold w-fit ${ESTADO_SA_BADGE[f.latestSA.estado_global]}`}>
+                            <span className={`w-2 h-2 rounded-full ${ESTADO_SA_DOT[f.latestSA.estado_global]}`} />
+                            {ESTADO_SA_LABEL[f.latestSA.estado_global]}
+                          </span>
+                        ) : (
+                          <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-lg bg-navy/5 text-navy/35">
+                            No evaluado
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-navy/60 whitespace-nowrap">
+                        {f.latestSA ? fechaCorta(f.latestSA.fecha) : <span className="text-navy/25">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
+    </div>
+  )
+}
+
+function StatCardSA({ label, valor, cls }: { label: string; valor: number; cls: string }) {
+  return (
+    <div className="bg-white rounded-2xl border border-navy/10 shadow-sm p-5 text-center">
+      <p className={`text-3xl font-bold tabular-nums ${cls}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
+        {valor}
+      </p>
+      <p className="text-xs text-navy/40 mt-1">{label}</p>
     </div>
   )
 }

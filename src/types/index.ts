@@ -3,6 +3,11 @@ export type Area          = 'PRODUCTO' | 'SERVICIO' | 'LOCAL'
 export type Severidad     = 'NINGUNA' | 'LEVE' | 'MEDIA' | 'GRAVE' | 'EXTREMA'
 export type EstadoVisita  = 'PROGRAMADA' | 'REALIZADA' | 'CANCELADA'
 
+/** Módulo Seguridad Alimentaria: estado de un punto individual del checklist. */
+export type EstadoPunto       = 'CUMPLE' | 'NO_CUMPLE' | 'NO_APLICA'
+/** Módulo Seguridad Alimentaria: estado cualitativo de una sección o global. */
+export type EstadoCualitativo = 'CORRECTO' | 'MEJORA' | 'DEFICIENTE'
+
 /** Modo de descuento cuando severidad = 'EXTREMA', solo elegible en áreas Producto/Servicio/Local. */
 export type ExtremaModo   = 'PESO' | 'PORCENTAJE'
 
@@ -225,4 +230,30 @@ export interface AuComboLocal {
   id:       string
   combo_id: string
   local_id: string
+}
+
+export interface AuSaEvaluacion {
+  id:            string
+  local_id:      string
+  auditor_cut:   string
+  fecha:         string
+  estado_global: EstadoCualitativo | null
+  creado_en:     string
+}
+
+export interface AuSaRespuesta {
+  id:             string
+  evaluacion_id:  string
+  seccion_key:    string
+  punto_key:      string
+  punto_nombre:   string   // snapshot legible
+  seccion_nombre: string   // snapshot legible
+  estado:         EstadoPunto
+}
+
+export interface AuSaPersona {
+  id:           string
+  respuesta_id: string
+  nombre:       string
+  accesorio:    string | null
 }

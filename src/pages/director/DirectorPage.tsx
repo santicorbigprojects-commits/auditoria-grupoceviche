@@ -2,20 +2,37 @@ import { useState, useEffect } from 'react'
 import SidebarLayout, { type NavItem } from '../../components/ui/SidebarLayout'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
-import type { AuLocal, AuMarca, AuAuditoria, AuObservacion } from '../../types'
+import type { AuLocal, AuMarca, AuAuditoria, AuObservacion, AuSaEvaluacion, EstadoCualitativo } from '../../types'
 import DetalleAuditoria from '../../components/director/DetalleAuditoria'
+import DetalleEvaluacionSA from '../../components/director/DetalleEvaluacionSA'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { eliminarAuditoria } from '../../lib/eliminarAuditoria'
 import AccionesMejoraPage from '../AccionesMejoraPage'
 import ResultadoGeneralPage from '../ResultadoGeneralPage'
 
-type Tab = 'resultado' | 'historial' | 'acciones'
+type Tab = 'resultado' | 'historial' | 'seguridad' | 'acciones'
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 function semColor(nota: number) {
   if (nota >= 16) return { dot: 'bg-green-500',  badge: 'bg-green-100 text-green-700'    }
   if (nota >= 12) return { dot: 'bg-ambar',       badge: 'bg-ambar/15 text-ambar'        }
   return               { dot: 'bg-terranova',    badge: 'bg-terranova/10 text-terranova' }
+}
+
+const ESTADO_SA_BADGE: Record<EstadoCualitativo, string> = {
+  CORRECTO:   'bg-green-100 text-green-700',
+  MEJORA:     'bg-ambar/15 text-ambar',
+  DEFICIENTE: 'bg-terranova/10 text-terranova',
+}
+const ESTADO_SA_DOT: Record<EstadoCualitativo, string> = {
+  CORRECTO:   'bg-green-500',
+  MEJORA:     'bg-ambar',
+  DEFICIENTE: 'bg-terranova',
+}
+const ESTADO_SA_LABEL: Record<EstadoCualitativo, string> = {
+  CORRECTO:   'Correcto',
+  MEJORA:     'Mejora',
+  DEFICIENTE: 'Deficiente',
 }
 
 interface LatestAud { fecha: string; nota_total: number }
@@ -36,7 +53,11 @@ export default function DirectorPage() {
   const [obsMap,     setObsMap]     = useState<Record<string, AuObservacion[]>>({})
   const [loadingDet, setLoadingDet] = useState(false)
 
-  const [detalleAud, setDetalleAud] = useState<AuAuditoria | null>(null)
+  const [evaluacionesSA, setEvaluacionesSA] = useState<AuSaEvaluacion[]>([])
+  const [loadingDetSA,   setLoadingDetSA]   = useState(false)
+
+  const [detalleAud,   setDetalleAud]   = useState<AuAuditoria | null>(null)
+  const [detalleEvalSA, setDetalleEvalSA] = useState<AuSaEvaluacion | null>(null)
 
   const [aEliminar,     setAEliminar]     = useState<AuAuditoria | null>(null)
   const [eliminando,    setEliminando]    = useState(false)
@@ -131,8 +152,23 @@ export default function DirectorPage() {
   useEffect(() => {
     if (!selLocalId) return
     loadDetail(selLocalId)
+    loadDetailSA(selLocalId)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selLocalId])
+
+  /* ── Carga historial de seguridad alimentaria del local seleccionado ──── */
+  async function loadDetailSA(localId: string) {
+    setLoadingDetSA(true)
+    const { data: evs } = await supabase
+      .from('au_sa_evaluaciones')
+      .select('*')
+      .eq('local_id', localId)
+      .order('fecha', { ascending: false })
+      .order('creado_en', { ascending: false })
+      .range(0, 9999)
+    setEvaluacionesSA(evs ?? [])
+    setLoadingDetSA(false)
+  }
 
   async function handleEliminar() {
     if (!aEliminar) return
@@ -168,6 +204,12 @@ export default function DirectorPage() {
       active:  tab === 'historial',
     },
     {
+      label:   'Seguridad alimentaria',
+      icon:    <IconSeguridad />,
+      onClick: () => setTab('seguridad'),
+      active:  tab === 'seguridad',
+    },
+    {
       label:   'Acciones de mejora',
       icon:    <IconAcciones />,
       onClick: () => setTab('acciones'),
@@ -190,6 +232,122 @@ export default function DirectorPage() {
         <ResultadoGeneralPage />
       ) : tab === 'acciones' ? (
         <AccionesMejoraPage />
+      ) : tab === 'seguridad' ? (
+        <div className="p-6 max-w-6xl mx-auto">
+
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-navy" style={{ fontFamily: 'Poppins, sans-serif' }}>
+              Seguridad alimentaria
+            </h2>
+            <p className="text-sm text-navy/40 mt-0.5">
+              {rol === 'ADMIN' ? 'Todos los locales' : 'Locales asignados a tu cuenta'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[260px_1fr] gap-6 items-start">
+
+            {/* ── Lista de locales (misma selección que Historial) ──────── */}
+            <div className="bg-white rounded-2xl border border-navy/10 shadow-sm overflow-hidden xl:sticky xl:top-6">
+              <div className="px-4 py-3 border-b border-navy/10">
+                <p className="text-[10px] font-bold text-navy/35 uppercase tracking-wide">Locales</p>
+              </div>
+              <div className="divide-y divide-navy/[0.06] max-h-[600px] overflow-y-auto">
+                {locales.length === 0 && (
+                  <p className="px-4 py-8 text-sm text-navy/30 text-center">Sin locales asignados.</p>
+                )}
+                {locales.map(l => {
+                  const isSel = l.id === selLocalId
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => setSelLocalId(l.id)}
+                      className={`w-full text-left px-4 py-3 transition ${
+                        isSel ? 'bg-naranja/10' : 'hover:bg-navy/[0.03]'
+                      }`}
+                    >
+                      <p className={`text-sm font-semibold truncate ${isSel ? 'text-naranja' : 'text-navy'}`}>
+                        {l.nombre}
+                      </p>
+                      <p className="text-xs text-navy/35 truncate mt-0.5">{marcaMap[l.marca_id] ?? ''}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* ── Panel de historial de seguridad alimentaria ───────────── */}
+            {!selLocalId ? (
+              <div className="bg-white rounded-2xl border border-navy/10 p-10 text-center">
+                <svg className="w-10 h-10 text-navy/15 mx-auto mb-3" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor" strokeWidth={1.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l2 2 3.5-3.5" />
+                </svg>
+                <p className="text-sm text-navy/30">Selecciona un local para ver su historial.</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-navy/10 shadow-sm overflow-hidden">
+
+                <div className="px-6 py-4 border-b border-navy/10">
+                  <h3 className="text-base font-bold text-navy" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                    {selLocal?.nombre}
+                  </h3>
+                  <p className="text-xs text-navy/40 mt-0.5">{marcaMap[selLocal?.marca_id ?? ''] ?? ''}</p>
+                </div>
+
+                {loadingDetSA ? (
+                  <div className="flex items-center justify-center h-40">
+                    <div className="animate-spin w-6 h-6 rounded-full border-4 border-naranja border-t-transparent" />
+                  </div>
+                ) : evaluacionesSA.length === 0 ? (
+                  <div className="px-6 py-12 text-center">
+                    <p className="text-sm text-navy/30">Sin evaluaciones de seguridad alimentaria para este local.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-navy/[0.06]">
+                    {evaluacionesSA.map(e => {
+                      const fechaFmt = (() => {
+                        try {
+                          return new Date(e.fecha + 'T12:00:00').toLocaleDateString('es-ES', {
+                            day: 'numeric', month: 'short', year: 'numeric',
+                          })
+                        } catch { return e.fecha }
+                      })()
+                      return (
+                        <div key={e.id} className="flex items-center justify-between gap-3 px-6 py-3.5">
+                          <div>
+                            <p className="text-sm font-semibold text-navy capitalize">{fechaFmt}</p>
+                            <p className="text-xs text-navy/35 font-mono mt-0.5">{e.auditor_cut}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {e.estado_global ? (
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ${ESTADO_SA_BADGE[e.estado_global]}`}>
+                                <span className={`w-2 h-2 rounded-full ${ESTADO_SA_DOT[e.estado_global]}`} />
+                                {ESTADO_SA_LABEL[e.estado_global]}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-navy/25">—</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setDetalleEvalSA(e)}
+                              className="text-xs px-3 py-1.5 rounded-lg border border-navy/20 text-navy/55
+                                         hover:border-naranja hover:text-naranja transition font-medium whitespace-nowrap"
+                            >
+                              Ver detalle
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       ) : (
       <div className="p-6 max-w-6xl mx-auto">
 
@@ -390,6 +548,15 @@ export default function DirectorPage() {
         />
       )}
 
+      {/* Modal detalle — seguridad alimentaria */}
+      {detalleEvalSA && (
+        <DetalleEvaluacionSA
+          evaluacion={detalleEvalSA}
+          localNombre={selLocal?.nombre ?? ''}
+          onClose={() => setDetalleEvalSA(null)}
+        />
+      )}
+
       {/* Modal confirmar eliminación (solo ADMIN) */}
       {aEliminar && (
         <ConfirmModal
@@ -419,6 +586,16 @@ function IconHistorial() {
     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round"
         d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    </svg>
+  )
+}
+
+function IconSeguridad() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l2 2 3.5-3.5" />
     </svg>
   )
 }

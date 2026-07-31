@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import SidebarLayout, { type NavItem } from '../../components/ui/SidebarLayout'
-import ResultadoGeneralPage from '../ResultadoGeneralPage'
-import TrackingPage        from './TrackingPage'
-import CalendarioPage      from './CalendarioPage'
-import ConfiguracionPage   from './ConfiguracionPage'
-import MisAuditoriasPage   from './MisAuditoriasPage'
-import AccionesMejoraPage  from '../AccionesMejoraPage'
+import ResultadoGeneralPage  from '../ResultadoGeneralPage'
+import NuevaAuditoriaPage    from './NuevaAuditoriaPage'
+import CalendarioPage        from './CalendarioPage'
+import ConfiguracionPage     from './ConfiguracionPage'
+import MisAuditoriasPage     from './MisAuditoriasPage'
+import MisEvaluacionesSAPage from './MisEvaluacionesSAPage'
+import AccionesMejoraPage    from '../AccionesMejoraPage'
 
-type Tab = 'resultado' | 'tracking' | 'historial' | 'acciones' | 'calendario' | 'config'
+type Tab = 'resultado' | 'tracking' | 'historial' | 'seguridad' | 'acciones' | 'calendario' | 'config'
 
 export default function AuditorPage() {
   const [tab, setTab] = useState<Tab>('resultado')
@@ -32,6 +33,12 @@ export default function AuditorPage() {
       active:  tab === 'historial',
     },
     {
+      label:   'Seguridad alimentaria',
+      icon:    <IconSeguridad />,
+      onClick: () => setTab('seguridad'),
+      active:  tab === 'seguridad',
+    },
+    {
       label:   'Acciones de mejora',
       icon:    <IconAcciones />,
       onClick: () => setTab('acciones'),
@@ -54,8 +61,9 @@ export default function AuditorPage() {
   return (
     <SidebarLayout navItems={navItems}>
       {tab === 'resultado'  && <ResultadoGeneralPage />}
-      {tab === 'tracking'   && <TrackingPage />}
+      {tab === 'tracking'   && <NuevaAuditoriaPage />}
       {tab === 'historial'  && <MisAuditoriasPage />}
+      {tab === 'seguridad'  && <MisEvaluacionesSAPage />}
       {tab === 'acciones'   && <AccionesMejoraPage />}
       {tab === 'calendario' && <CalendarioPage />}
       {tab === 'config'     && <ConfiguracionPage />}
@@ -86,6 +94,16 @@ function IconHistorial() {
     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round"
         d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  )
+}
+
+function IconSeguridad() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l2 2 3.5-3.5" />
     </svg>
   )
 }
