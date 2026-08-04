@@ -62,7 +62,7 @@ function fechaCorta(fecha: string): string {
 
 export default function AccionesMejoraPage() {
   const { cut, rol } = useAuthStore()
-  const puedeEditar = rol === 'AUDITOR'
+  const puedeEditar = rol === 'AUDITOR' || rol === 'DIRECTOR' || rol === 'ADMIN'
 
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
