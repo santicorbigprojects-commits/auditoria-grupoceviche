@@ -257,3 +257,90 @@ export interface AuSaPersona {
   nombre:       string
   accesorio:    string | null
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Módulo Auditorías de Obradores (Plancha/Salsa, Pastelería, Panadería)
+   Independiente de la Auditoría de Calidad. Nota 0-20, 5 aspectos con pesos
+   diferenciados. Respuesta por aspecto: 0=No, 1=Masomenos, 2=Sí.
+══════════════════════════════════════════════════════════════════════════ */
+
+export type RespuestaObrador = 0 | 1 | 2
+
+export interface AuObrador {
+  id:          string
+  nombre:      string
+  descripcion: string | null
+  categoria:   string | null
+  activo:      boolean
+}
+
+export interface AuConfigObradorAspecto {
+  id:            string
+  nombre:        string
+  descripcion:   string | null
+  puntos_maximo: number
+  orden:         number
+  activo:        boolean
+}
+
+export interface AuAuditoriaObrador {
+  id:                      string
+  obrador_id:              string
+  auditor_cut:             string
+  fecha_auditoria:         string
+  nota_final:              number
+  observaciones_generales: string | null
+  creado_en:               string
+  actualizado_en:          string
+}
+
+export interface AuAuditoriaObradorAspecto {
+  id:           string
+  auditoria_id: string
+  aspecto_id:   string
+  respuesta:    RespuestaObrador
+  observacion:  string | null
+}
+
+export interface AuAuditoriaObradorObservacion {
+  id:           string
+  auditoria_id: string
+  aspecto_id:   string | null
+  descripcion:  string
+  severidad:    Severidad
+  extrema_modo: ExtremaModo | null
+  peso_resta:   number
+}
+
+export interface AuAuditoriaObradorEvidencia {
+  id:             string
+  auditoria_id:   string
+  aspecto_id:     string | null
+  url:            string
+  archivo_nombre: string | null
+}
+
+export interface AuAccionMejoraObrador {
+  id:                string
+  observacion_id:    string
+  auditoria_id:      string
+  obrador_id:        string
+  accion_correctiva: string | null
+  fecha_evaluacion:  string | null
+  resuelto:          boolean
+  actualizado_en:    string
+}
+
+export interface AuVisitaObrador {
+  id:               string
+  obrador_id:       string
+  auditor_cut:      string
+  fecha_programada: string
+  estado:           EstadoVisita
+  notas:            string | null
+}
+
+export interface AuConfigSeveridadObrador {
+  severidad: Severidad
+  descuento: number
+}

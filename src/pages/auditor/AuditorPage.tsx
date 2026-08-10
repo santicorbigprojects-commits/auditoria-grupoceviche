@@ -6,9 +6,10 @@ import CalendarioPage        from './CalendarioPage'
 import ConfiguracionPage     from './ConfiguracionPage'
 import MisAuditoriasPage     from './MisAuditoriasPage'
 import MisEvaluacionesSAPage from './MisEvaluacionesSAPage'
+import MisAuditoriasObradorPage from './MisAuditoriasObradorPage'
 import AccionesMejoraPage    from '../AccionesMejoraPage'
 
-type Tab = 'resultado' | 'tracking' | 'historial' | 'seguridad' | 'acciones' | 'calendario' | 'config'
+type Tab = 'resultado' | 'tracking' | 'historial' | 'seguridad' | 'obrador' | 'acciones' | 'calendario' | 'config'
 
 export default function AuditorPage() {
   const [tab, setTab] = useState<Tab>('resultado')
@@ -39,6 +40,12 @@ export default function AuditorPage() {
       active:  tab === 'seguridad',
     },
     {
+      label:   'Auditorías de obrador',
+      icon:    <IconObrador />,
+      onClick: () => setTab('obrador'),
+      active:  tab === 'obrador',
+    },
+    {
       label:   'Acciones de mejora',
       icon:    <IconAcciones />,
       onClick: () => setTab('acciones'),
@@ -64,6 +71,7 @@ export default function AuditorPage() {
       {tab === 'tracking'   && <NuevaAuditoriaPage />}
       {tab === 'historial'  && <MisAuditoriasPage />}
       {tab === 'seguridad'  && <MisEvaluacionesSAPage />}
+      {tab === 'obrador'    && <MisAuditoriasObradorPage />}
       {tab === 'acciones'   && <AccionesMejoraPage />}
       {tab === 'calendario' && <CalendarioPage />}
       {tab === 'config'     && <ConfiguracionPage />}
@@ -113,6 +121,15 @@ function IconAcciones() {
     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round"
         d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  )
+}
+
+function IconObrador() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M4 21V9l8-6 8 6v12M4 21h16M9 21v-6h6v6" />
     </svg>
   )
 }

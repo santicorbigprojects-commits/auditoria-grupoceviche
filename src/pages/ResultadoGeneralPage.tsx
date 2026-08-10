@@ -1,8 +1,15 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import type { AuLocal, AuDirectorLocal, EstadoCualitativo } from '../types'
+import type { AuLocal, AuDirectorLocal, EstadoCualitativo, AuObrador } from '../types'
 
-type Tab = 'calidad' | 'seguridad'
+type Tab = 'calidad' | 'seguridad' | 'obrador'
+
+/* ── Semáforo de Obradores (cortes propios: 17/13, distintos a Calidad) ──── */
+function semColorObrador(nota: number) {
+  if (nota >= 17) return { dot: 'bg-green-500', badge: 'bg-green-100 text-green-700' }
+  if (nota >= 13) return { dot: 'bg-ambar',      badge: 'bg-ambar/15 text-ambar'     }
+  return               { dot: 'bg-terranova', badge: 'bg-terranova/10 text-terranova' }
+}
 
 /* ── Semáforo (mismos cortes que DirectorPage) ────────────────────────────── */
 function semColor(nota: number) {
@@ -39,6 +46,12 @@ interface LatestSA {
   creado_en:     string
 }
 
+interface LatestObrador {
+  fecha:      string
+  nota_final: number
+  creado_en:  string
+}
+
 interface FilaLocal {
   local:          AuLocal
   directorNombre: string
@@ -62,6 +75,9 @@ export default function ResultadoGeneralPage() {
   const [directorPorLocal, setDirectorPorLocal] = useState<Record<string, string>>({})
   const [latestByLocal,    setLatestByLocal]    = useState<Record<string, LatestAud>>({})
   const [latestSAByLocal,  setLatestSAByLocal]  = useState<Record<string, LatestSA>>({})
+
+  const [obradores,           setObradores]           = useState<AuObrador[]>([])
+  const [latestByObrador,     setLatestByObrador]      = useState<Record<string, LatestObrador>>({})
 
   const [filtroDirector, setFiltroDirector] = useState<string>('TODOS')
   const [tab, setTab] = useState<Tab>('calidad')
@@ -144,6 +160,31 @@ export default function ResultadoGeneralPage() {
         }
       }
       setLatestSAByLocal(latestSA)
+
+      // 5. Obradores activos + su auditoría más reciente
+      const { data: obs, error: eOb } = await supabase
+        .from('au_obradores')
+        .select('*')
+        .eq('activo', true)
+        .order('nombre')
+      if (eOb) throw eOb
+      setObradores(obs ?? [])
+
+      const { data: audsObrador, error: eAO } = await supabase
+        .from('au_auditoria_obrador')
+        .select('obrador_id, fecha_auditoria, nota_final, creado_en')
+        .order('fecha_auditoria', { ascending: false })
+        .order('creado_en', { ascending: false })
+        .range(0, 9999)
+      if (eAO) throw eAO
+
+      const latestObrador: Record<string, LatestObrador> = {}
+      for (const a of (audsObrador ?? [])) {
+        if (a.nota_final !== null && !latestObrador[a.obrador_id]) {
+          latestObrador[a.obrador_id] = { fecha: a.fecha_auditoria, nota_final: a.nota_final, creado_en: a.creado_en }
+        }
+      }
+      setLatestByObrador(latestObrador)
     } catch (err) {
       console.error(err)
       setError('Error cargando el resultado general. Intenta de nuevo.')
@@ -206,7 +247,9 @@ export default function ResultadoGeneralPage() {
         <p className="text-sm text-navy/40 mt-0.5">
           {tab === 'calidad'
             ? 'Nota promedio del grupo, calculada con la última auditoría de cada local.'
-            : 'Estado de seguridad alimentaria de cada local, según su última evaluación.'}
+            : tab === 'seguridad'
+            ? 'Estado de seguridad alimentaria de cada local, según su última evaluación.'
+            : 'Última auditoría de cada obrador (Plancha/Salsa, Pastelería, Panadería).'}
         </p>
       </div>
 
@@ -230,6 +273,15 @@ export default function ResultadoGeneralPage() {
         >
           Seguridad alimentaria
         </button>
+        <button
+          type="button"
+          onClick={() => setTab('obrador')}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+            tab === 'obrador' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
+          }`}
+        >
+          Obradores
+        </button>
       </div>
 
       {error && (
@@ -242,7 +294,39 @@ export default function ResultadoGeneralPage() {
         </div>
       )}
 
-      {tab === 'calidad' ? (
+      {tab === 'obrador' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {obradores.length === 0 ? (
+            <div className="sm:col-span-3 rounded-2xl border-2 border-dashed border-navy/15 p-10 text-center">
+              <p className="text-navy/30 text-sm">No hay obradores configurados.</p>
+            </div>
+          ) : (
+            obradores.map(o => {
+              const latest = latestByObrador[o.id] ?? null
+              const col = latest ? semColorObrador(latest.nota_final) : null
+              return (
+                <div key={o.id} className="bg-white rounded-2xl border border-navy/10 shadow-sm p-6 text-center">
+                  <p className="text-sm font-bold text-navy mb-3">{o.nombre}</p>
+                  {latest ? (
+                    <>
+                      <p className={`text-4xl font-bold tabular-nums ${col!.badge.split(' ')[1]}`} style={{ fontFamily: 'Poppins, sans-serif' }}>
+                        {latest.nota_final.toFixed(1)}
+                        <span className="text-lg font-normal opacity-50"> / 20</span>
+                      </p>
+                      <div className="flex items-center justify-center gap-1.5 mt-2">
+                        <span className={`w-2 h-2 rounded-full ${col!.dot}`} />
+                        <span className="text-xs text-navy/40">{fechaCorta(latest.fecha)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm font-semibold text-navy/30 mt-3">No auditado</p>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
+      ) : tab === 'calidad' ? (
         <>
           {/* Nota general destacada */}
           <div className="bg-white rounded-2xl border border-navy/10 shadow-sm p-8 mb-6 text-center">

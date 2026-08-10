@@ -2,23 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store/authStore'
 import type {
-  AuObservacion, AuAuditoria, AuLocal, AuAccionMejora, AuDirectorLocal,
-  AreaObservacion, Severidad, ExtremaModo,
+  AuAuditoriaObrador, AuAuditoriaObradorObservacion, AuAccionMejoraObrador, AuObrador,
+  Severidad, ExtremaModo,
 } from '../types'
-import AccionesMejoraObradorSection from './AccionesMejoraObradorSection'
-
-type TabTipo = 'locales' | 'obradores'
-
-/* ── Labels y colores (mismo esquema que el resto de la app) ─────────────── */
-
-const AREA_LABEL: Record<AreaObservacion, string> = {
-  PRODUCTO:      'Producto',
-  SERVICIO:      'Servicio',
-  LOCAL:         'Local',
-  RI_REVISION:   'Revisión de productos',
-  RI_ROTULACION: 'Rotulación de productos',
-  RI_HIGIENE:    'Higiene de cocina',
-}
 
 const SEV_LABEL: Record<Severidad, string> = {
   NINGUNA: 'Ninguna',
@@ -38,17 +24,17 @@ const SEV_BADGE: Record<Severidad, string> = {
 
 const MODO_LABEL: Record<ExtremaModo, string> = {
   PESO:       'Peso fijo',
-  PORCENTAJE: '−50% del área',
+  PORCENTAJE: '−50% de la nota',
 }
 
 type EstadoFiltro = 'TODAS' | 'PENDIENTES' | 'RESUELTAS'
 
 interface FilaData {
-  observacion:    AuObservacion
-  auditoria:      AuAuditoria
-  localNombre:    string
-  directorNombre: string
-  accion:         AuAccionMejora | null
+  observacion:   AuAuditoriaObradorObservacion
+  auditoria:     AuAuditoriaObrador
+  obradorNombre: string
+  aspectoNombre: string
+  accion:        AuAccionMejoraObrador | null
 }
 
 function fechaCorta(fecha: string): string {
@@ -59,140 +45,84 @@ function fechaCorta(fecha: string): string {
   } catch { return fecha }
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   Root
-══════════════════════════════════════════════════════════════════════════ */
-
-export default function AccionesMejoraPage() {
-  const { cut, rol } = useAuthStore()
+export default function AccionesMejoraObradorSection() {
+  const { rol } = useAuthStore()
   const puedeEditar = rol === 'AUDITOR' || rol === 'DIRECTOR' || rol === 'ADMIN'
 
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
   const [filas,   setFilas]   = useState<FilaData[]>([])
-  const [locales, setLocales] = useState<AuLocal[]>([])
-  const [directorPorLocal, setDirectorPorLocal] = useState<Record<string, string>>({})
+  const [obradores, setObradores] = useState<AuObrador[]>([])
 
-  const [filtroLocal,    setFiltroLocal]    = useState<string>('TODOS')
-  const [filtroEstado,   setFiltroEstado]   = useState<EstadoFiltro>('TODAS')
-  const [filtroDirector, setFiltroDirector] = useState<string>('TODOS')
-
-  const [tabTipo, setTabTipo] = useState<TabTipo>('locales')
+  const [filtroObrador, setFiltroObrador] = useState<string>('TODOS')
+  const [filtroEstado,  setFiltroEstado]  = useState<EstadoFiltro>('TODAS')
 
   useEffect(() => {
     load()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cut, rol])
+  }, [])
 
   async function load() {
     setLoading(true)
     setError(null)
     try {
-      // 1. Locales visibles según rol: director → solo los suyos; auditor/admin → todos.
-      let localesList: AuLocal[] = []
-      let localIds:    string[]  = []
+      const { data: obData, error: eOb } = await supabase.from('au_obradores').select('*').order('nombre')
+      if (eOb) throw eOb
+      const obradoresList = (obData ?? []) as AuObrador[]
+      setObradores(obradoresList)
+      const obradorNombreMap: Record<string, string> = {}
+      obradoresList.forEach(o => { obradorNombreMap[o.id] = o.nombre })
 
-      if (rol === 'DIRECTOR') {
-        const { data: dl } = await supabase
-          .from('au_director_locales')
-          .select('local_id')
-          .eq('director_cut', cut!)
-        const ids = (dl ?? []).map((r: { local_id: string }) => r.local_id)
-        if (ids.length > 0) {
-          const { data: l } = await supabase.from('au_locales').select('*').in('id', ids).order('nombre')
-          localesList = l ?? []
-          localIds    = ids
-        }
-      } else {
-        const { data: l } = await supabase.from('au_locales').select('*').order('nombre')
-        localesList = l ?? []
-        localIds    = localesList.map(x => x.id)
-      }
-      setLocales(localesList)
+      const { data: aspData, error: eAsp } = await supabase.from('au_config_obrador_aspectos').select('id, nombre')
+      if (eAsp) throw eAsp
+      const aspectoNombreMap: Record<string, string> = {}
+      ;(aspData ?? []).forEach((a: { id: string; nombre: string }) => { aspectoNombreMap[a.id] = a.nombre })
 
-      if (localIds.length === 0) { setFilas([]); return }
-
-      // 1b. Director de cada local (au_director_locales → au_usuarios)
-      const { data: dlData, error: eDl } = await supabase
-        .from('au_director_locales')
-        .select('*')
-        .in('local_id', localIds)
-      if (eDl) throw eDl
-      const directorLocales = (dlData ?? []) as AuDirectorLocal[]
-
-      const directorCuts = Array.from(new Set(directorLocales.map(d => d.director_cut)))
-      const directorNombreMap: Record<string, string> = {}
-      if (directorCuts.length > 0) {
-        const { data: usersData, error: eUs } = await supabase
-          .from('au_usuarios')
-          .select('cut, nombre')
-          .in('cut', directorCuts)
-        if (eUs) throw eUs
-        ;(usersData ?? []).forEach((u: { cut: string; nombre: string }) => {
-          directorNombreMap[u.cut] = u.nombre
-        })
-      }
-
-      const localDirectorMap: Record<string, string> = {}
-      directorLocales.forEach(dl => {
-        const nombre = directorNombreMap[dl.director_cut]
-        if (nombre) localDirectorMap[dl.local_id] = nombre
-      })
-      setDirectorPorLocal(localDirectorMap)
-
-      // 2. Auditorías de esos locales
       const { data: auds, error: e1 } = await supabase
-        .from('au_auditorias')
+        .from('au_auditoria_obrador')
         .select('*')
-        .in('local_id', localIds)
         .range(0, 9999)
       if (e1) throw e1
-      const auditorias   = (auds ?? []) as AuAuditoria[]
+      const auditorias = (auds ?? []) as AuAuditoriaObrador[]
       const auditoriaIds = auditorias.map(a => a.id)
 
       if (auditoriaIds.length === 0) { setFilas([]); return }
 
-      // 3. Observaciones de esas auditorías (todas las áreas)
       const { data: obsData, error: e2 } = await supabase
-        .from('au_observaciones')
+        .from('au_auditoria_obrador_observaciones')
         .select('*')
         .in('auditoria_id', auditoriaIds)
         .range(0, 9999)
       if (e2) throw e2
-      const observaciones = (obsData ?? []) as AuObservacion[]
+      const observaciones = (obsData ?? []) as AuAuditoriaObradorObservacion[]
 
       if (observaciones.length === 0) { setFilas([]); return }
 
-      // 4. Acciones de mejora ya registradas para esas observaciones
       const { data: accData, error: e3 } = await supabase
-        .from('au_acciones_mejora')
+        .from('au_acciones_mejora_obrador')
         .select('*')
         .in('observacion_id', observaciones.map(o => o.id))
         .range(0, 9999)
       if (e3) throw e3
-      const accionesMap: Record<string, AuAccionMejora> = {}
-      ;(accData ?? []).forEach((a: AuAccionMejora) => { accionesMap[a.observacion_id] = a })
+      const accionesMap: Record<string, AuAccionMejoraObrador> = {}
+      ;(accData ?? []).forEach((a: AuAccionMejoraObrador) => { accionesMap[a.observacion_id] = a })
 
-      // 5. Cruzar todo en memoria
-      const auditoriaMap: Record<string, AuAuditoria> = {}
+      const auditoriaMap: Record<string, AuAuditoriaObrador> = {}
       auditorias.forEach(a => { auditoriaMap[a.id] = a })
-      const localMap: Record<string, string> = {}
-      localesList.forEach(l => { localMap[l.id] = l.nombre })
 
       const rows: FilaData[] = observaciones
         .map((o): FilaData | null => {
           const aud = auditoriaMap[o.auditoria_id]
           if (!aud) return null
           return {
-            observacion:    o,
-            auditoria:      aud,
-            localNombre:    localMap[aud.local_id] ?? '—',
-            directorNombre: localDirectorMap[aud.local_id] ?? '—',
-            accion:         accionesMap[o.id] ?? null,
+            observacion:   o,
+            auditoria:     aud,
+            obradorNombre: obradorNombreMap[aud.obrador_id] ?? '—',
+            aspectoNombre: o.aspecto_id ? (aspectoNombreMap[o.aspecto_id] ?? '—') : 'General',
+            accion:        accionesMap[o.id] ?? null,
           }
         })
         .filter((r): r is FilaData => r !== null)
-        .sort((a, b) => b.auditoria.fecha.localeCompare(a.auditoria.fecha))
+        .sort((a, b) => b.auditoria.fecha_auditoria.localeCompare(a.auditoria.fecha_auditoria))
 
       setFilas(rows)
     } catch (err) {
@@ -203,25 +133,19 @@ export default function AccionesMejoraPage() {
     }
   }
 
-  const directores = useMemo(() => {
-    return Array.from(new Set(Object.values(directorPorLocal))).sort((a, b) => a.localeCompare(b))
-  }, [directorPorLocal])
-
   const filasFiltradas = useMemo(() => {
     return filas.filter(f => {
-      if (filtroLocal    !== 'TODOS' && f.auditoria.local_id !== filtroLocal) return false
-      if (filtroDirector !== 'TODOS' && f.directorNombre     !== filtroDirector) return false
+      if (filtroObrador !== 'TODOS' && f.auditoria.obrador_id !== filtroObrador) return false
       if (filtroEstado === 'PENDIENTES' && f.accion?.resuelto) return false
       if (filtroEstado === 'RESUELTAS'  && !f.accion?.resuelto) return false
       return true
     })
-  }, [filas, filtroLocal, filtroDirector, filtroEstado])
+  }, [filas, filtroObrador, filtroEstado])
 
-  function handleAccionGuardada(observacionId: string, accion: AuAccionMejora) {
+  function handleAccionGuardada(observacionId: string, accion: AuAccionMejoraObrador) {
     setFilas(prev => prev.map(f => f.observacion.id === observacionId ? { ...f, accion } : f))
   }
 
-  /* ── Render ─────────────────────────────────────────────────────────── */
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -231,44 +155,7 @@ export default function AccionesMejoraPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-navy" style={{ fontFamily: 'Poppins, sans-serif' }}>
-          Acciones de mejora
-        </h2>
-        <p className="text-sm text-navy/40 mt-0.5">
-          {puedeEditar
-            ? 'Registra la acción correctiva y la fecha de evaluación de cada observación.'
-            : rol === 'ADMIN' ? 'Todos los locales' : 'Locales asignados a tu cuenta'}
-        </p>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-navy/10">
-        <button
-          type="button"
-          onClick={() => setTabTipo('locales')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
-            tabTipo === 'locales' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
-          }`}
-        >
-          Locales
-        </button>
-        <button
-          type="button"
-          onClick={() => setTabTipo('obradores')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
-            tabTipo === 'obradores' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
-          }`}
-        >
-          Obradores
-        </button>
-      </div>
-
-      {tabTipo === 'obradores' ? (
-        <AccionesMejoraObradorSection />
-      ) : (
-      <>
+    <div>
       {error && (
         <div className="mb-4 flex items-center gap-2 text-sm text-terranova bg-terranova/10 rounded-xl px-4 py-3">
           <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -282,23 +169,13 @@ export default function AccionesMejoraPage() {
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <select
-          value={filtroLocal}
-          onChange={e => setFiltroLocal(e.target.value)}
+          value={filtroObrador}
+          onChange={e => setFiltroObrador(e.target.value)}
           className="px-3 py-2 rounded-xl border border-navy/20 bg-white text-navy text-sm
                      focus:outline-none focus:ring-2 focus:ring-naranja/40 focus:border-naranja transition"
         >
-          <option value="TODOS">Todos los locales</option>
-          {locales.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-        </select>
-
-        <select
-          value={filtroDirector}
-          onChange={e => setFiltroDirector(e.target.value)}
-          className="px-3 py-2 rounded-xl border border-navy/20 bg-white text-navy text-sm
-                     focus:outline-none focus:ring-2 focus:ring-naranja/40 focus:border-naranja transition"
-        >
-          <option value="TODOS">Todos los directores</option>
-          {directores.map(d => <option key={d} value={d}>{d}</option>)}
+          <option value="TODOS">Todos los obradores</option>
+          {obradores.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
         </select>
 
         <div className="flex rounded-xl border border-navy/20 overflow-hidden">
@@ -328,13 +205,12 @@ export default function AccionesMejoraPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-navy/10 shadow-sm overflow-x-auto">
-          <table className="w-full text-sm min-w-[1280px]">
+          <table className="w-full text-sm min-w-[1180px]">
             <thead>
               <tr className="border-b border-navy/10">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Fecha auditoría</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Local</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Director</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Área</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Obrador</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Aspecto</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide min-w-[200px]">Observación</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Severidad</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide min-w-[220px]">Acción de mejora</th>
@@ -344,7 +220,7 @@ export default function AccionesMejoraPage() {
             </thead>
             <tbody className="divide-y divide-navy/5">
               {filasFiltradas.map(f => (
-                <FilaObservacion
+                <FilaObservacionObrador
                   key={f.observacion.id}
                   data={f}
                   puedeEditar={puedeEditar}
@@ -355,26 +231,20 @@ export default function AccionesMejoraPage() {
           </table>
         </div>
       )}
-      </>
-      )}
     </div>
   )
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   Fila (guardado autónomo por fila)
-══════════════════════════════════════════════════════════════════════════ */
-
-function FilaObservacion({
+function FilaObservacionObrador({
   data, puedeEditar, onGuardado,
 }: {
   data:        FilaData
   puedeEditar: boolean
-  onGuardado:  (accion: AuAccionMejora) => void
+  onGuardado:  (accion: AuAccionMejoraObrador) => void
 }) {
-  const { observacion: o, auditoria: a, localNombre, directorNombre, accion } = data
+  const { observacion: o, auditoria: a, obradorNombre, aspectoNombre, accion } = data
 
-  const [accionTexto, setAccionTexto] = useState(accion?.accion ?? '')
+  const [accionTexto, setAccionTexto] = useState(accion?.accion_correctiva ?? '')
   const [fechaEval,   setFechaEval]   = useState(accion?.fecha_evaluacion ?? '')
   const [resuelto,    setResuelto]    = useState(accion?.resuelto ?? false)
   const [saving, setSaving] = useState(false)
@@ -382,7 +252,7 @@ function FilaObservacion({
   const [err,    setErr]    = useState(false)
 
   async function guardar(patch: {
-    accion?: string
+    accion_correctiva?: string
     fecha_evaluacion?: string | null
     resuelto?: boolean
   }) {
@@ -390,14 +260,16 @@ function FilaObservacion({
     setOk(false)
     setErr(false)
     const payload = {
-      observacion_id:   o.id,
-      accion:           patch.accion !== undefined ? (patch.accion || null) : (accionTexto || null),
-      fecha_evaluacion: patch.fecha_evaluacion !== undefined ? patch.fecha_evaluacion : (fechaEval || null),
-      resuelto:         patch.resuelto !== undefined ? patch.resuelto : resuelto,
-      actualizado_en:   new Date().toISOString(),
+      observacion_id:    o.id,
+      auditoria_id:       a.id,
+      obrador_id:          a.obrador_id,
+      accion_correctiva:  patch.accion_correctiva !== undefined ? (patch.accion_correctiva || null) : (accionTexto || null),
+      fecha_evaluacion:   patch.fecha_evaluacion !== undefined ? patch.fecha_evaluacion : (fechaEval || null),
+      resuelto:           patch.resuelto !== undefined ? patch.resuelto : resuelto,
+      actualizado_en:     new Date().toISOString(),
     }
     const { data: saved, error } = await supabase
-      .from('au_acciones_mejora')
+      .from('au_acciones_mejora_obrador')
       .upsert(payload, { onConflict: 'observacion_id' })
       .select()
       .single()
@@ -405,12 +277,12 @@ function FilaObservacion({
     if (error || !saved) { setErr(true); return }
     setOk(true)
     setTimeout(() => setOk(false), 2000)
-    onGuardado(saved as AuAccionMejora)
+    onGuardado(saved as AuAccionMejoraObrador)
   }
 
   function handleBlurAccion() {
-    if (accionTexto === (accion?.accion ?? '')) return
-    guardar({ accion: accionTexto })
+    if (accionTexto === (accion?.accion_correctiva ?? '')) return
+    guardar({ accion_correctiva: accionTexto })
   }
 
   function handleBlurFecha() {
@@ -427,12 +299,11 @@ function FilaObservacion({
 
   return (
     <tr className="hover:bg-navy/[0.03] transition-colors align-top">
-      <td className="px-4 py-3 text-navy/70 whitespace-nowrap">{fechaCorta(a.fecha)}</td>
-      <td className="px-4 py-3 text-navy/70 max-w-[160px] truncate" title={localNombre}>{localNombre}</td>
-      <td className="px-4 py-3 text-navy/70 max-w-[160px] truncate" title={directorNombre}>{directorNombre}</td>
-      <td className="px-4 py-3 text-navy/70 whitespace-nowrap">{AREA_LABEL[o.area]}</td>
+      <td className="px-4 py-3 text-navy/70 whitespace-nowrap">{fechaCorta(a.fecha_auditoria)}</td>
+      <td className="px-4 py-3 text-navy/70 max-w-[160px] truncate" title={obradorNombre}>{obradorNombre}</td>
+      <td className="px-4 py-3 text-navy/70 whitespace-nowrap">{aspectoNombre}</td>
       <td className="px-4 py-3 text-navy/70 min-w-[200px]">
-        <p className="leading-relaxed">{o.texto}</p>
+        <p className="leading-relaxed">{o.descripcion}</p>
       </td>
       <td className="px-4 py-3">
         <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${SEV_BADGE[o.severidad]}`}>

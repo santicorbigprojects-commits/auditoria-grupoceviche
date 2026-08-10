@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 import CalendarioVisitas from '../../components/calendario/CalendarioVisitas'
+import VisitasObradorPage from './VisitasObradorPage'
 import type { AuVisita, AuLocal, AuMarca, EstadoVisita } from '../../types'
+
+type TabTipo = 'locales' | 'obradores'
 
 const MESES_ES = [
   'Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -124,6 +127,8 @@ type ExpPeriodo = 'futuras' | 'mes' | 'rango'
 
 export default function CalendarioPage() {
   const { cut } = useAuthStore()
+
+  const [tabTipo, setTabTipo] = useState<TabTipo>('locales')
 
   const [mesDate,  setMesDate]  = useState(() => new Date())
   const [visitas,  setVisitas]  = useState<AuVisita[]>([])
@@ -327,24 +332,52 @@ export default function CalendarioPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
+      <div className="mb-4 flex items-center justify-between gap-4 flex-wrap">
         <h2 className="text-2xl font-bold text-navy" style={{ fontFamily: 'Poppins, sans-serif' }}>
           Calendario de visitas
         </h2>
+        {tabTipo === 'locales' && (
+          <button
+            type="button"
+            onClick={() => { setShowExport(true); setExpMsg(null) }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-navy/20 text-sm font-medium
+                       text-navy/55 hover:border-naranja/50 hover:text-naranja hover:bg-naranja/5 transition"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Exportar .ics
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6 border-b border-navy/10">
         <button
           type="button"
-          onClick={() => { setShowExport(true); setExpMsg(null) }}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-navy/20 text-sm font-medium
-                     text-navy/55 hover:border-naranja/50 hover:text-naranja hover:bg-naranja/5 transition"
+          onClick={() => setTabTipo('locales')}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+            tabTipo === 'locales' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
+          }`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round"
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          Exportar .ics
+          Locales
+        </button>
+        <button
+          type="button"
+          onClick={() => setTabTipo('obradores')}
+          className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+            tabTipo === 'obradores' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
+          }`}
+        >
+          Obradores
         </button>
       </div>
 
+      {tabTipo === 'obradores' ? (
+        <VisitasObradorPage />
+      ) : (
+      <>
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
 
         {/* ── Cuadrícula del mes ──────────────────────────────────────── */}
@@ -720,6 +753,8 @@ export default function CalendarioPage() {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   )

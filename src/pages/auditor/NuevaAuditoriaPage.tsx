@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import TrackingPage from './TrackingPage'
 import SeguridadAlimentariaPage from './SeguridadAlimentariaPage'
+import AuditoriaObradorPage from './AuditoriaObradorPage'
 
-type Tipo = 'calidad' | 'seguridad' | null
+type Tipo = 'calidad' | 'seguridad' | 'obrador' | null
 
 export default function NuevaAuditoriaPage() {
   const [tipo, setTipo] = useState<Tipo>(null)
@@ -19,13 +20,13 @@ export default function NuevaAuditoriaPage() {
             ← Cambiar tipo de auditoría
           </button>
         </div>
-        {tipo === 'calidad' ? <TrackingPage /> : <SeguridadAlimentariaPage />}
+        {tipo === 'calidad' ? <TrackingPage /> : tipo === 'seguridad' ? <SeguridadAlimentariaPage /> : <AuditoriaObradorPage />}
       </>
     )
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-navy" style={{ fontFamily: 'Poppins, sans-serif' }}>
           Nueva auditoría
@@ -33,7 +34,7 @@ export default function NuevaAuditoriaPage() {
         <p className="text-sm text-navy/40 mt-0.5">Elige el tipo de evaluación que vas a realizar.</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
         <TipoCard
           titulo="Auditoría de calidad"
           descripcion="Producto, servicio, local y revisión interna. Nota numérica sobre 20."
@@ -45,6 +46,12 @@ export default function NuevaAuditoriaPage() {
           descripcion="Higiene, APPCC y buenas prácticas. Resultado cualitativo por semáforo."
           icon={<IconSeguridad />}
           onClick={() => setTipo('seguridad')}
+        />
+        <TipoCard
+          titulo="Auditoría de Obrador"
+          descripcion="Plancha/Salsa, Pastelería o Panadería. 5 aspectos con pesos, nota sobre 20."
+          icon={<IconObrador />}
+          onClick={() => setTipo('obrador')}
         />
       </div>
     </div>
@@ -88,6 +95,15 @@ function IconSeguridad() {
       <path strokeLinecap="round" strokeLinejoin="round"
         d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l2 2 3.5-3.5" />
+    </svg>
+  )
+}
+
+function IconObrador() {
+  return (
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M4 21V9l8-6 8 6v12M4 21h16M9 21v-6h6v6" />
     </svg>
   )
 }
