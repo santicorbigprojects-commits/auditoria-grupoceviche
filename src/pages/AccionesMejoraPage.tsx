@@ -65,7 +65,7 @@ function fechaCorta(fecha: string): string {
 
 export default function AccionesMejoraPage() {
   const { cut, rol } = useAuthStore()
-  const puedeEditar = rol === 'AUDITOR' || rol === 'DIRECTOR' || rol === 'ADMIN'
+  const puedeEditar = rol === 'AUDITOR' || rol === 'DIRECTOR' || rol === 'ADMIN' || rol === 'VISUALIZADOR'
 
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
@@ -239,7 +239,7 @@ export default function AccionesMejoraPage() {
         <p className="text-sm text-navy/40 mt-0.5">
           {puedeEditar
             ? 'Registra la acción correctiva y la fecha de evaluación de cada observación.'
-            : rol === 'ADMIN' ? 'Todos los locales' : 'Locales asignados a tu cuenta'}
+            : 'Todos los locales'}
         </p>
       </div>
 

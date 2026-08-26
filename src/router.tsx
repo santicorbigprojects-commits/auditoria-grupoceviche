@@ -14,7 +14,7 @@ export const router = createBrowserRouter([
   },
   {
     path: '/director',
-    element: <ProtectedRoute roles={['DIRECTOR', 'ADMIN']} />,
+    element: <ProtectedRoute roles={['DIRECTOR', 'ADMIN', 'VISUALIZADOR']} />,
     children: [{ index: true, element: <DirectorPage /> }],
   },
 ])

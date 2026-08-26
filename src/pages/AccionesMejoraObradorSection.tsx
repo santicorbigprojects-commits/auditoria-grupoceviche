@@ -47,7 +47,7 @@ function fechaCorta(fecha: string): string {
 
 export default function AccionesMejoraObradorSection() {
   const { rol } = useAuthStore()
-  const puedeEditar = rol === 'AUDITOR' || rol === 'DIRECTOR' || rol === 'ADMIN'
+  const puedeEditar = rol === 'AUDITOR' || rol === 'DIRECTOR' || rol === 'ADMIN' || rol === 'VISUALIZADOR'
 
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)

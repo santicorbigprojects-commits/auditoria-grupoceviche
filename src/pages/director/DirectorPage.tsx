@@ -36,6 +36,7 @@ const ESTADO_SA_LABEL: Record<EstadoCualitativo, string> = {
 }
 
 interface LatestAud { fecha: string; nota_total: number }
+interface LatestSA { fecha: string; estado_global: EstadoCualitativo }
 
 /* ── Componente ────────────────────────────────────────────────────────── */
 export default function DirectorPage() {
@@ -46,6 +47,7 @@ export default function DirectorPage() {
   const [locales,       setLocales]       = useState<AuLocal[]>([])
   const [marcas,        setMarcas]        = useState<AuMarca[]>([])
   const [latestByLocal, setLatestByLocal] = useState<Record<string, LatestAud>>({})
+  const [latestSAByLocal, setLatestSAByLocal] = useState<Record<string, LatestSA>>({})
   const [loading,       setLoading]       = useState(true)
 
   const [selLocalId, setSelLocalId] = useState<string | null>(null)
@@ -72,7 +74,7 @@ export default function DirectorPage() {
       let localesList: AuLocal[] = []
       let localIds: string[]     = []
 
-      if (rol === 'ADMIN') {
+      if (rol === 'ADMIN' || rol === 'VISUALIZADOR') {
         const { data: l } = await supabase
           .from('au_locales').select('*').eq('activo', true).order('nombre')
         localesList = l ?? []
@@ -108,6 +110,22 @@ export default function DirectorPage() {
           }
         }
         setLatestByLocal(latest)
+
+        const { data: sas } = await supabase
+          .from('au_sa_evaluaciones')
+          .select('local_id, fecha, estado_global, creado_en')
+          .in('local_id', localIds)
+          .order('fecha', { ascending: false })
+          .order('creado_en', { ascending: false })
+          .range(0, 9999)
+
+        const latestSA: Record<string, LatestSA> = {}
+        for (const s of (sas ?? [])) {
+          if (s.estado_global && !latestSA[s.local_id]) {
+            latestSA[s.local_id] = { fecha: s.fecha, estado_global: s.estado_global }
+          }
+        }
+        setLatestSAByLocal(latestSA)
       }
 
       setLoading(false)
@@ -240,7 +258,7 @@ export default function DirectorPage() {
               Seguridad alimentaria
             </h2>
             <p className="text-sm text-navy/40 mt-0.5">
-              {rol === 'ADMIN' ? 'Todos los locales' : 'Locales asignados a tu cuenta'}
+              {rol === 'ADMIN' || rol === 'VISUALIZADOR' ? 'Todos los locales' : 'Locales asignados a tu cuenta'}
             </p>
           </div>
 
@@ -257,6 +275,7 @@ export default function DirectorPage() {
                 )}
                 {locales.map(l => {
                   const isSel = l.id === selLocalId
+                  const latestSA = latestSAByLocal[l.id]
                   return (
                     <button
                       key={l.id}
@@ -266,10 +285,22 @@ export default function DirectorPage() {
                         isSel ? 'bg-naranja/10' : 'hover:bg-navy/[0.03]'
                       }`}
                     >
-                      <p className={`text-sm font-semibold truncate ${isSel ? 'text-naranja' : 'text-navy'}`}>
-                        {l.nombre}
-                      </p>
-                      <p className="text-xs text-navy/35 truncate mt-0.5">{marcaMap[l.marca_id] ?? ''}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={`text-sm font-semibold truncate ${isSel ? 'text-naranja' : 'text-navy'}`}>
+                            {l.nombre}
+                          </p>
+                          <p className="text-xs text-navy/35 truncate mt-0.5">{marcaMap[l.marca_id] ?? ''}</p>
+                        </div>
+                        {latestSA ? (
+                          <span className={`flex-shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${ESTADO_SA_BADGE[latestSA.estado_global]}`}>
+                            <span className={`w-2 h-2 rounded-full ${ESTADO_SA_DOT[latestSA.estado_global]}`} />
+                            {ESTADO_SA_LABEL[latestSA.estado_global]}
+                          </span>
+                        ) : (
+                          <span className="flex-shrink-0 text-xs text-navy/20">–</span>
+                        )}
+                      </div>
                     </button>
                   )
                 })}
@@ -356,7 +387,7 @@ export default function DirectorPage() {
             Historial de auditorías
           </h2>
           <p className="text-sm text-navy/40 mt-0.5">
-            {rol === 'ADMIN' ? 'Todos los locales' : 'Locales asignados a tu cuenta'}
+            {rol === 'ADMIN' || rol === 'VISUALIZADOR' ? 'Todos los locales' : 'Locales asignados a tu cuenta'}
           </p>
         </div>
 
@@ -454,7 +485,7 @@ export default function DirectorPage() {
               ) : (
                 <>
                   {/* Cabecera de columnas */}
-                  <div className="hidden sm:grid grid-cols-[1fr_72px_72px_72px_100px_90px] gap-3
+                  <div className="hidden sm:grid grid-cols-[1fr_72px_72px_72px_90px_190px] gap-3
                                   px-6 py-2.5 border-b border-navy/10 bg-navy/[0.02]">
                     {['Fecha / Auditor', 'Producto', 'Servicio', 'Local', 'Total', ''].map(h => (
                       <span key={h} className="text-[10px] font-bold text-navy/35 uppercase tracking-wide">{h}</span>
@@ -478,7 +509,7 @@ export default function DirectorPage() {
                       return (
                         <div
                           key={a.id}
-                          className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_72px_72px_72px_100px_90px]
+                          className="grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_72px_72px_72px_90px_190px]
                                      gap-3 px-6 py-3.5 items-center"
                         >
                           {/* Fecha + auditor */}

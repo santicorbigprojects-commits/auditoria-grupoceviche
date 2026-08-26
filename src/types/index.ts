@@ -1,4 +1,4 @@
-export type Rol           = 'AUDITOR' | 'DIRECTOR' | 'ADMIN'
+export type Rol           = 'AUDITOR' | 'DIRECTOR' | 'ADMIN' | 'VISUALIZADOR'
 export type Area          = 'PRODUCTO' | 'SERVICIO' | 'LOCAL'
 export type Severidad     = 'NINGUNA' | 'LEVE' | 'MEDIA' | 'GRAVE' | 'EXTREMA'
 export type EstadoVisita  = 'PROGRAMADA' | 'REALIZADA' | 'CANCELADA'

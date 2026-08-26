@@ -77,11 +77,11 @@ export default function SidebarLayout({ children, navItems }: Props) {
         <button
           onClick={() => setCollapsed(c => !c)}
           title={collapsed ? 'Expandir' : 'Colapsar'}
-          className="absolute top-[18px] -right-3 z-10 w-6 h-6 rounded-full bg-navy border-2 border-crema flex items-center justify-center hover:bg-naranja transition-colors"
+          className="absolute top-[18px] -right-3 z-10 w-7 h-7 rounded-full bg-navy border-2 border-crema shadow-md flex items-center justify-center hover:bg-naranja transition-colors"
         >
           <svg
-            className={`w-2.5 h-2.5 text-white transition-transform duration-200 ${collapsed ? 'rotate-180' : ''}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}
+            className={`w-3 h-3 text-white transition-transform duration-200 ${collapsed ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
