@@ -1,48 +1,47 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { loginConCut } from '../lib/auth'
 import { useAuthStore } from '../store/authStore'
-import type { AuUsuario } from '../types'
 
 export default function Login() {
   const navigate = useNavigate()
-  const { login, isAuthenticated, rol } = useAuthStore()
+  const { cargarSesion, isAuthenticated, rol, cargando } = useAuthStore()
 
   const [cut, setCut]       = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError]   = useState<string | null>(null)
 
   // Si ya tiene sesión activa redirige de inmediato
   useEffect(() => {
-    if (isAuthenticated()) {
+    if (!cargando && isAuthenticated()) {
       navigate(rol === 'AUDITOR' ? '/auditor' : '/director', { replace: true })
     }
-  // Solo al montar
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargando])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     setLoading(true)
 
-    const { data, error: dbErr } = await supabase
-      .from('au_usuarios')
-      .select('cut, nombre, rol, activo')
-      .eq('cut', cut.trim().toUpperCase())
-      .eq('activo', true)
-      .single()
+    const result = await loginConCut(cut, password)
 
-    setLoading(false)
-
-    if (dbErr || !data) {
-      setError('CUT no encontrado o usuario inactivo.')
+    if (!result.ok) {
+      setLoading(false)
+      setError(result.error ?? 'CUT o contraseña incorrectos.')
       return
     }
 
-    const usuario = data as AuUsuario
-    login(usuario.cut, usuario.nombre, usuario.rol)
-    navigate(usuario.rol === 'AUDITOR' ? '/auditor' : '/director', { replace: true })
+    await cargarSesion()
+    setLoading(false)
+
+    const nuevoRol = useAuthStore.getState().rol
+    if (!nuevoRol) {
+      setError('CUT no encontrado o usuario inactivo.')
+      return
+    }
+    navigate(nuevoRol === 'AUDITOR' ? '/auditor' : '/director', { replace: true })
   }
 
   return (
@@ -66,7 +65,7 @@ export default function Login() {
         <div className="bg-white rounded-2xl shadow-xl shadow-navy/10 p-8">
           <h2 className="text-lg font-semibold text-navy">Iniciar sesión</h2>
           <p className="text-sm text-navy/50 mt-0.5 mb-6">
-            Ingresa tu código de empleado (CUT)
+            Ingresa tu código de empleado (CUT) y contraseña
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -97,6 +96,30 @@ export default function Login() {
               />
             </div>
 
+            <div>
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-navy mb-1.5"
+              >
+                Contraseña
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(null) }}
+                placeholder="••••••••"
+                className="
+                  w-full px-4 py-2.5 rounded-xl border
+                  border-navy/20 bg-crema/60
+                  text-navy text-base
+                  placeholder:text-navy/25
+                  focus:outline-none focus:ring-2 focus:ring-naranja/40 focus:border-naranja
+                  transition-all duration-150
+                "
+              />
+            </div>
+
             {error && (
               <div className="flex items-start gap-2.5 text-sm text-terranova bg-terranova/8 rounded-xl px-4 py-3">
                 <IconError className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -106,7 +129,7 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={loading || !cut.trim()}
+              disabled={loading || !cut.trim() || !password}
               className="
                 w-full py-2.5 px-4 rounded-xl font-semibold text-white text-sm
                 bg-naranja hover:bg-terranova

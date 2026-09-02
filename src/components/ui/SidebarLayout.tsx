@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
+import { CambiarPasswordModal } from './CambiarPasswordModal'
 
 export interface NavItem {
   label:   string
@@ -16,6 +17,7 @@ interface Props {
 
 export default function SidebarLayout({ children, navItems }: Props) {
   const [collapsed, setCollapsed] = useState(false)
+  const [mostrarCambiarPassword, setMostrarCambiarPassword] = useState(false)
   const { nombre, rol, logout } = useAuthStore()
   const navigate = useNavigate()
 
@@ -96,6 +98,19 @@ export default function SidebarLayout({ children, navItems }: Props) {
             </div>
           )}
           <button
+            onClick={() => setMostrarCambiarPassword(true)}
+            title="Cambiar contraseña"
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-white/50 hover:text-white hover:bg-white/10 transition-colors ${
+              collapsed ? 'justify-center' : ''
+            }`}
+          >
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4v-3l5.257-5.257A6 6 0 1121 9z" />
+            </svg>
+            {!collapsed && 'Contraseña'}
+          </button>
+          <button
             onClick={handleLogout}
             title="Cerrar sesión"
             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-white/50 hover:text-white hover:bg-white/10 transition-colors ${
@@ -115,6 +130,10 @@ export default function SidebarLayout({ children, navItems }: Props) {
       <main className="flex-1 overflow-y-auto min-w-0">
         {children}
       </main>
+
+      {mostrarCambiarPassword && (
+        <CambiarPasswordModal onClose={() => setMostrarCambiarPassword(false)} />
+      )}
     </div>
   )
 }
