@@ -1,41 +1,40 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type { Rol } from '../types'
+import { cargarSesionDesdeAuth, cerrarSesion } from '../lib/auth'
 
 interface AuthState {
-  cut:      string | null
-  nombre:   string | null
-  rol:      Rol | null
-  expiresAt: number | null
+  cut: string | null
+  nombre: string | null
+  rol: Rol | null
+  cargando: boolean
 
-  login:           (cut: string, nombre: string, rol: Rol) => void
-  logout:          () => void
+  cargarSesion: () => Promise<void>
+  logout: () => Promise<void>
   isAuthenticated: () => boolean
 }
 
-const SESSION_MS = 8 * 60 * 60 * 1000  // 8 horas
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  cut: null,
+  nombre: null,
+  rol: null,
+  cargando: true,
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      cut:       null,
-      nombre:    null,
-      rol:       null,
-      expiresAt: null,
+  async cargarSesion() {
+    set({ cargando: true })
+    const sesion = await cargarSesionDesdeAuth()
+    if (sesion) {
+      set({ cut: sesion.cut, nombre: sesion.nombre, rol: sesion.rol, cargando: false })
+    } else {
+      set({ cut: null, nombre: null, rol: null, cargando: false })
+    }
+  },
 
-      login(cut, nombre, rol) {
-        set({ cut, nombre, rol, expiresAt: Date.now() + SESSION_MS })
-      },
+  async logout() {
+    await cerrarSesion()
+    set({ cut: null, nombre: null, rol: null })
+  },
 
-      logout() {
-        set({ cut: null, nombre: null, rol: null, expiresAt: null })
-      },
-
-      isAuthenticated() {
-        const { cut, expiresAt } = get()
-        return !!cut && !!expiresAt && Date.now() < expiresAt
-      },
-    }),
-    { name: 'au_session' },
-  ),
-)
+  isAuthenticated() {
+    return !!get().cut
+  },
+}))
