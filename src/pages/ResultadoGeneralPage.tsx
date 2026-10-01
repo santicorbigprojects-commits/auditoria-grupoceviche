@@ -1,8 +1,19 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import type { AuLocal, AuDirectorLocal, EstadoCualitativo, AuObrador } from '../types'
+import { cargarDirectorPorLocal, cargarLocalesAsignados } from '../lib/directores'
+import { useAuthStore } from '../store/authStore'
+import type { AuLocal, EstadoCualitativo, AuObrador } from '../types'
 
 type Tab = 'calidad' | 'seguridad' | 'obrador'
+type ModoNota = 'reciente' | 'promedio'
+
+const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+/* 'YYYY-MM' → 'Jul 2026' */
+function mesLabel(mes: string): string {
+  const [anio, m] = mes.split('-')
+  return `${MESES_CORTOS[Number(m) - 1]} ${anio}`
+}
 
 /* ── Semáforo de Obradores (cortes propios: 17/13, distintos a Calidad) ──── */
 function semColorObrador(nota: number) {
@@ -34,10 +45,18 @@ const ESTADO_SA_LABEL: Record<EstadoCualitativo, string> = {
   DEFICIENTE: 'Deficiente',
 }
 
-interface LatestAud {
+interface AudNota {
+  local_id:   string
   fecha:      string
   nota_total: number
-  creado_en:  string
+}
+
+/* Nota de un local dentro del periodo seleccionado */
+interface NotaLocal {
+  nota:    number     // la más reciente o el promedio, según el modo
+  fecha:   string     // fecha de la auditoría más reciente del periodo
+  desde:   string     // fecha de la auditoría más antigua del periodo
+  detalle: AudNota[]  // auditorías del periodo, de la más reciente a la más antigua
 }
 
 interface LatestSA {
@@ -55,7 +74,7 @@ interface LatestObrador {
 interface FilaLocal {
   local:          AuLocal
   directorNombre: string
-  latest:         LatestAud | null
+  latest:         NotaLocal | null
   latestSA:       LatestSA  | null
 }
 
@@ -73,81 +92,66 @@ export default function ResultadoGeneralPage() {
 
   const [locales,          setLocales]          = useState<AuLocal[]>([])
   const [directorPorLocal, setDirectorPorLocal] = useState<Record<string, string>>({})
-  const [latestByLocal,    setLatestByLocal]    = useState<Record<string, LatestAud>>({})
+  const [auditorias,       setAuditorias]       = useState<AudNota[]>([])
   const [latestSAByLocal,  setLatestSAByLocal]  = useState<Record<string, LatestSA>>({})
 
   const [obradores,           setObradores]           = useState<AuObrador[]>([])
   const [latestByObrador,     setLatestByObrador]      = useState<Record<string, LatestObrador>>({})
 
   const [filtroDirector, setFiltroDirector] = useState<string>('TODOS')
+  const [mesesSel,       setMesesSel]       = useState<string[]>([])   // 'YYYY-MM'; vacío = todos
+  const [modoNota,       setModoNota]       = useState<ModoNota>('reciente')
   const [tab, setTab] = useState<Tab>('calidad')
+
+  // Encargados (VISUALIZADOR con locales asignados): solo ven sus locales, sin obradores.
+  // Los directores siguen viendo el grupo completo en esta vista.
+  const { cut, rol } = useAuthStore()
+  const [esEncargado, setEsEncargado] = useState(false)
 
   useEffect(() => {
     load()
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cut, rol])
 
   async function load() {
     setLoading(true)
     setError(null)
     try {
+      // 0. Alcance: null = todos los locales
+      const alcance = rol === 'VISUALIZADOR' ? await cargarLocalesAsignados(cut!, rol) : null
+      setEsEncargado(alcance !== null)
+
       // 1. Locales activos
-      const { data: l, error: eL } = await supabase
-        .from('au_locales')
-        .select('*')
-        .eq('activo', true)
-        .order('nombre')
+      let qLocales = supabase.from('au_locales').select('*').eq('activo', true)
+      if (alcance) qLocales = qLocales.in('id', alcance)
+      const { data: l, error: eL } = await qLocales.order('nombre')
       if (eL) throw eL
       const localesList = (l ?? []) as AuLocal[]
       setLocales(localesList)
 
-      // 2. Director de cada local (au_director_locales → au_usuarios)
-      const { data: dlData, error: eDl } = await supabase
-        .from('au_director_locales')
-        .select('*')
-      if (eDl) throw eDl
-      const directorLocales = (dlData ?? []) as AuDirectorLocal[]
+      // 2. Director de cada local
+      setDirectorPorLocal(await cargarDirectorPorLocal(alcance ?? undefined))
 
-      const directorCuts = Array.from(new Set(directorLocales.map(d => d.director_cut)))
-      const directorNombreMap: Record<string, string> = {}
-      if (directorCuts.length > 0) {
-        const { data: usersData, error: eUs } = await supabase
-          .from('au_usuarios')
-          .select('cut, nombre')
-          .in('cut', directorCuts)
-        if (eUs) throw eUs
-        ;(usersData ?? []).forEach((u: { cut: string; nombre: string }) => {
-          directorNombreMap[u.cut] = u.nombre
-        })
-      }
-
-      const localDirectorMap: Record<string, string> = {}
-      directorLocales.forEach(dl => {
-        const nombre = directorNombreMap[dl.director_cut]
-        if (nombre) localDirectorMap[dl.local_id] = nombre
-      })
-      setDirectorPorLocal(localDirectorMap)
-
-      // 3. Todas las auditorías, quedarse con la más reciente por local
-      const { data: auds, error: eA } = await supabase
-        .from('au_auditorias')
-        .select('local_id, fecha, nota_total, creado_en')
+      // 3. Todas las auditorías con nota (de la más reciente a la más antigua).
+      //    La nota por local se calcula según los meses y el modo elegidos.
+      let qAuds = supabase.from('au_auditorias').select('local_id, fecha, nota_total, creado_en')
+      if (alcance) qAuds = qAuds.in('local_id', alcance)
+      const { data: auds, error: eA } = await qAuds
         .order('fecha', { ascending: false })
         .order('creado_en', { ascending: false })
         .range(0, 9999)
       if (eA) throw eA
 
-      const latest: Record<string, LatestAud> = {}
-      for (const a of (auds ?? [])) {
-        if (a.nota_total !== null && !latest[a.local_id]) {
-          latest[a.local_id] = { fecha: a.fecha, nota_total: a.nota_total, creado_en: a.creado_en }
-        }
-      }
-      setLatestByLocal(latest)
+      setAuditorias(
+        (auds ?? [])
+          .filter(a => a.nota_total !== null)
+          .map(a => ({ local_id: a.local_id, fecha: a.fecha, nota_total: a.nota_total }))
+      )
 
       // 4. Evaluaciones de seguridad alimentaria, quedarse con la más reciente por local
-      const { data: evsSA, error: eSA } = await supabase
-        .from('au_sa_evaluaciones')
-        .select('local_id, fecha, estado_global, creado_en')
+      let qSA = supabase.from('au_sa_evaluaciones').select('local_id, fecha, estado_global, creado_en')
+      if (alcance) qSA = qSA.in('local_id', alcance)
+      const { data: evsSA, error: eSA } = await qSA
         .order('fecha', { ascending: false })
         .order('creado_en', { ascending: false })
         .range(0, 9999)
@@ -161,7 +165,12 @@ export default function ResultadoGeneralPage() {
       }
       setLatestSAByLocal(latestSA)
 
-      // 5. Obradores activos + su auditoría más reciente
+      // 5. Obradores activos + su auditoría más reciente (no aplica a encargados)
+      if (alcance) {
+        setObradores([])
+        setLatestByObrador({})
+        return
+      }
       const { data: obs, error: eOb } = await supabase
         .from('au_obradores')
         .select('*')
@@ -197,26 +206,58 @@ export default function ResultadoGeneralPage() {
     return Array.from(new Set(Object.values(directorPorLocal))).sort((a, b) => a.localeCompare(b))
   }, [directorPorLocal])
 
+  /* Meses con auditorías, agrupados por año (más reciente primero) */
+  const mesesPorAnio = useMemo(() => {
+    const meses = Array.from(new Set(auditorias.map(a => a.fecha.slice(0, 7)))).sort()
+    const porAnio: Record<string, string[]> = {}
+    meses.forEach(m => { (porAnio[m.slice(0, 4)] ??= []).push(m) })
+    return Object.entries(porAnio).sort(([a], [b]) => b.localeCompare(a))
+  }, [auditorias])
+
+  function toggleMes(mes: string) {
+    setMesesSel(prev => prev.includes(mes) ? prev.filter(m => m !== mes) : [...prev, mes].sort())
+  }
+
+  /* Nota de cada local en los meses seleccionados (más reciente o promedio) */
+  const notaPorLocal = useMemo(() => {
+    const porLocal: Record<string, AudNota[]> = {}
+    for (const a of auditorias) {
+      if (mesesSel.length > 0 && !mesesSel.includes(a.fecha.slice(0, 7))) continue
+      ;(porLocal[a.local_id] ??= []).push(a)
+    }
+    const res: Record<string, NotaLocal> = {}
+    for (const [localId, auds] of Object.entries(porLocal)) {
+      const nota = modoNota === 'reciente'
+        ? auds[0].nota_total
+        : auds.reduce((acc, a) => acc + a.nota_total, 0) / auds.length
+      res[localId] = { nota, fecha: auds[0].fecha, desde: auds[auds.length - 1].fecha, detalle: auds }
+    }
+    return res
+  }, [auditorias, mesesSel, modoNota])
+
   const filas: FilaLocal[] = useMemo(() => {
     return locales
       .filter(l => filtroDirector === 'TODOS' || directorPorLocal[l.id] === filtroDirector)
       .map(l => ({
         local:          l,
         directorNombre: directorPorLocal[l.id] ?? '—',
-        latest:         latestByLocal[l.id] ?? null,
+        latest:         notaPorLocal[l.id] ?? null,
         latestSA:       latestSAByLocal[l.id] ?? null,
       }))
-  }, [locales, directorPorLocal, latestByLocal, latestSAByLocal, filtroDirector])
+  }, [locales, directorPorLocal, notaPorLocal, latestSAByLocal, filtroDirector])
 
-  const { promedio, auditados, total } = useMemo(() => {
+  const { promedio, auditados, total, conVarias } = useMemo(() => {
     const conNota = filas.filter(f => f.latest !== null)
-    const suma = conNota.reduce((acc, f) => acc + (f.latest?.nota_total ?? 0), 0)
+    const suma = conNota.reduce((acc, f) => acc + (f.latest?.nota ?? 0), 0)
     return {
       promedio:  conNota.length > 0 ? suma / conNota.length : null,
       auditados: conNota.length,
       total:     filas.length,
+      conVarias: conNota.filter(f => f.latest!.detalle.length > 1).length,
     }
   }, [filas])
+
+  const periodoLabel = mesesSel.length === 0 ? 'Todo el historial' : mesesSel.map(mesLabel).join(', ')
 
   const { correctosSA, mejoraSA, deficientesSA, evaluadosSA } = useMemo(() => {
     const conSA = filas.filter(f => f.latestSA !== null)
@@ -246,7 +287,9 @@ export default function ResultadoGeneralPage() {
         </h2>
         <p className="text-sm text-navy/40 mt-0.5">
           {tab === 'calidad'
-            ? 'Nota promedio del grupo, calculada con la última auditoría de cada local.'
+            ? `Nota promedio ${esEncargado ? 'de tus locales' : 'del grupo'}, calculada con ${
+                modoNota === 'reciente' ? 'la auditoría más reciente' : 'el promedio de las auditorías'
+              } de cada local en los meses seleccionados.`
             : tab === 'seguridad'
             ? 'Estado de seguridad alimentaria de cada local, según su última evaluación.'
             : 'Última auditoría de cada obrador (Plancha/Salsa, Pastelería, Panadería).'}
@@ -273,15 +316,17 @@ export default function ResultadoGeneralPage() {
         >
           Seguridad alimentaria
         </button>
-        <button
-          type="button"
-          onClick={() => setTab('obrador')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
-            tab === 'obrador' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
-          }`}
-        >
-          Obradores
-        </button>
+        {!esEncargado && (
+          <button
+            type="button"
+            onClick={() => setTab('obrador')}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+              tab === 'obrador' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
+            }`}
+          >
+            Obradores
+          </button>
+        )}
       </div>
 
       {error && (
@@ -328,12 +373,61 @@ export default function ResultadoGeneralPage() {
         </div>
       ) : tab === 'calidad' ? (
         <>
+          {/* Filtro por meses + modo de nota */}
+          <div className="bg-white rounded-2xl border border-navy/10 shadow-sm p-4 mb-4 space-y-4">
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtrar por meses">
+              <span className="text-xs font-semibold text-navy/40 uppercase tracking-wide w-full sm:w-auto sm:mr-1">Meses</span>
+              <ChipMes activo={mesesSel.length === 0} onClick={() => setMesesSel([])}>
+                Todos
+              </ChipMes>
+              {mesesPorAnio.map(([anio, meses]) => (
+                <div key={anio} className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-navy/35 ml-1 sm:ml-2">{anio}</span>
+                  {meses.map(m => (
+                    <ChipMes key={m} activo={mesesSel.includes(m)} onClick={() => toggleMes(m)} titulo={mesLabel(m)}>
+                      {MESES_CORTOS[Number(m.slice(5, 7)) - 1]}
+                    </ChipMes>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-navy/40 uppercase tracking-wide w-full sm:w-auto sm:mr-1">
+                Si hay varias auditorías
+              </span>
+              <div className="inline-flex rounded-xl border border-navy/15 bg-navy/[0.03] p-0.5" role="group" aria-label="Nota a mostrar cuando un local tiene varias auditorías">
+                {([['reciente', 'Más reciente'], ['promedio', 'Promedio']] as const).map(([valor, label]) => (
+                  <button
+                    key={valor}
+                    type="button"
+                    aria-pressed={modoNota === valor}
+                    onClick={() => setModoNota(valor)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition
+                                focus:outline-none focus-visible:ring-2 focus-visible:ring-naranja/50 ${
+                      modoNota === valor ? 'bg-white text-navy shadow-sm' : 'text-navy/45 hover:text-navy/70'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-navy/35">
+                {conVarias === 0
+                  ? 'Ningún local tiene más de una auditoría en este periodo.'
+                  : `${conVarias} ${conVarias === 1 ? 'local tiene' : 'locales tienen'} más de una auditoría en este periodo.`}
+              </span>
+            </div>
+          </div>
+
           {/* Nota general destacada */}
           <div className="bg-white rounded-2xl border border-navy/10 shadow-sm p-8 mb-6 text-center">
             {promedio === null ? (
               <>
                 <p className="text-4xl font-bold text-navy/25" style={{ fontFamily: 'Poppins, sans-serif' }}>—</p>
-                <p className="text-sm text-navy/40 mt-2">Aún no hay locales auditados.</p>
+                <p className="text-sm text-navy/40 mt-2">
+                  {mesesSel.length > 0 ? 'No hay locales auditados en los meses seleccionados.' : 'Aún no hay locales auditados.'}
+                </p>
               </>
             ) : (
               <>
@@ -347,6 +441,7 @@ export default function ResultadoGeneralPage() {
                 <p className="text-sm text-navy/40 mt-3">
                   Promedio de {auditados} {auditados === 1 ? 'local auditado' : 'locales auditados'} de {total}
                 </p>
+                <p className="text-xs text-navy/35 mt-1">{periodoLabel}</p>
               </>
             )}
           </div>
@@ -380,13 +475,19 @@ export default function ResultadoGeneralPage() {
                   <tr className="border-b border-navy/10">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Local</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide">Director</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Última nota</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">
+                      {modoNota === 'reciente' ? 'Nota más reciente' : 'Nota promedio'}
+                    </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-navy/40 uppercase tracking-wide whitespace-nowrap">Fecha</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-navy/5">
                   {filas.map(f => {
-                    const fCol = f.latest ? semColor(f.latest.nota_total) : null
+                    const fCol = f.latest ? semColor(f.latest.nota) : null
+                    const nAuds = f.latest?.detalle.length ?? 0
+                    const detalleTitle = f.latest
+                      ? f.latest.detalle.map(a => `${fechaCorta(a.fecha)}: ${a.nota_total.toFixed(1)}`).join('\n')
+                      : undefined
                     return (
                       <tr key={f.local.id} className={`hover:bg-navy/[0.03] transition-colors ${!f.latest ? 'opacity-60' : ''}`}>
                         <td className="px-4 py-3 text-navy font-medium max-w-[220px] truncate" title={f.local.nombre}>
@@ -397,10 +498,15 @@ export default function ResultadoGeneralPage() {
                         </td>
                         <td className="px-4 py-3">
                           {f.latest ? (
-                            <span className={`inline-flex items-baseline gap-0.5 px-2.5 py-1 rounded-lg text-sm font-bold tabular-nums w-fit ${fCol!.badge}`}>
-                              {f.latest.nota_total.toFixed(1)}
-                              <span className="text-xs font-normal opacity-60">/20</span>
-                            </span>
+                            <div className="flex items-center gap-2" title={detalleTitle}>
+                              <span className={`inline-flex items-baseline gap-0.5 px-2.5 py-1 rounded-lg text-sm font-bold tabular-nums w-fit ${fCol!.badge}`}>
+                                {f.latest.nota.toFixed(1)}
+                                <span className="text-xs font-normal opacity-60">/20</span>
+                              </span>
+                              {nAuds > 1 && (
+                                <span className="text-xs text-navy/40 whitespace-nowrap">{nAuds} auditorías</span>
+                              )}
+                            </div>
                           ) : (
                             <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-lg bg-navy/5 text-navy/35">
                               No auditado
@@ -408,7 +514,11 @@ export default function ResultadoGeneralPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-navy/60 whitespace-nowrap">
-                          {f.latest ? fechaCorta(f.latest.fecha) : <span className="text-navy/25">—</span>}
+                          {!f.latest
+                            ? <span className="text-navy/25">—</span>
+                            : modoNota === 'promedio' && nAuds > 1
+                            ? `${fechaCorta(f.latest.desde)} – ${fechaCorta(f.latest.fecha)}`
+                            : fechaCorta(f.latest.fecha)}
                         </td>
                       </tr>
                     )
@@ -496,6 +606,27 @@ export default function ResultadoGeneralPage() {
         </>
       )}
     </div>
+  )
+}
+
+function ChipMes({ activo, onClick, titulo, children }: {
+  activo: boolean; onClick: () => void; titulo?: string; children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={activo}
+      aria-label={titulo}
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-xl border text-sm font-semibold transition
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-naranja/50 ${
+        activo
+          ? 'bg-naranja border-naranja text-white'
+          : 'bg-white border-navy/15 text-navy/60 hover:border-naranja/50 hover:text-navy'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 
