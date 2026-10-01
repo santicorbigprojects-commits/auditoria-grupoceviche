@@ -9,9 +9,15 @@ function capitalizar(palabra: string, i: number): string {
   return p.charAt(0).toLocaleUpperCase('es') + p.slice(1)
 }
 
+/* Personas que no usan su primer nombre de pila ("ARCE OLIVEROS, CARMEN GIOVANNA" es Giovanna) */
+const NOMBRE_DE_USO: Record<string, string> = {
+  A00021: 'Giovanna',
+}
+
 /* "LUNA GUTIERREZ, ALEX HERNAN" → "Alex Luna" (primer nombre + primer apellido).
-   Respeta apellidos con partícula: "DE LA CRUZ PEREZ, JUAN" → "Juan de la Cruz". */
-export function nombreCorto(nombre: string): string {
+   Respeta apellidos con partícula: "DE LA CRUZ PEREZ, JUAN" → "Juan de la Cruz".
+   nombreDeUso reemplaza al primer nombre cuando la persona usa otro. */
+export function nombreCorto(nombre: string, nombreDeUso?: string): string {
   const [apellidos, nombres] = nombre.split(',').map(s => s.trim())
   if (!nombres) return nombre.split(/\s+/).map(capitalizar).join(' ')
 
@@ -21,7 +27,7 @@ export function nombreCorto(nombre: string): string {
     apellido.push(t)
     if (!PARTICULAS.has(t.toUpperCase())) break
   }
-  const primerNombre = nombres.split(/\s+/)[0]
+  const primerNombre = nombreDeUso ?? nombres.split(/\s+/)[0]
   return [primerNombre, ...apellido].map(capitalizar).join(' ')
 }
 
@@ -63,7 +69,7 @@ export async function cargarDirectorPorLocal(localIds?: string[]): Promise<Recor
 
   const nombrePorCut: Record<string, string> = {}
   ;(usersData ?? []).forEach((u: { cut: string; nombre: string }) => {
-    nombrePorCut[u.cut] = nombreCorto(u.nombre)
+    nombrePorCut[u.cut] = nombreCorto(u.nombre, NOMBRE_DE_USO[u.cut])
   })
 
   const directorPorLocal: Record<string, string> = {}
