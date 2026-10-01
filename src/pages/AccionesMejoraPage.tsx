@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { cargarDirectorPorLocal, cargarLocalesAsignados } from '../lib/directores'
 import { useAuthStore } from '../store/authStore'
 import type {
-  AuObservacion, AuAuditoria, AuLocal, AuAccionMejora, AuDirectorLocal,
+  AuObservacion, AuAuditoria, AuLocal, AuAccionMejora,
   AreaObservacion, Severidad, ExtremaModo,
 } from '../types'
 import AccionesMejoraObradorSection from './AccionesMejoraObradorSection'
@@ -78,6 +79,8 @@ export default function AccionesMejoraPage() {
   const [filtroDirector, setFiltroDirector] = useState<string>('TODOS')
 
   const [tabTipo, setTabTipo] = useState<TabTipo>('locales')
+  // Encargados (VISUALIZADOR con locales asignados): solo ven sus locales, sin obradores
+  const [esEncargado, setEsEncargado] = useState(false)
 
   useEffect(() => {
     load()
@@ -88,20 +91,18 @@ export default function AccionesMejoraPage() {
     setLoading(true)
     setError(null)
     try {
-      // 1. Locales visibles según rol: director → solo los suyos; auditor/admin → todos.
+      // 1. Locales visibles según rol: director y encargado → solo los suyos; resto → todos.
       let localesList: AuLocal[] = []
       let localIds:    string[]  = []
 
-      if (rol === 'DIRECTOR') {
-        const { data: dl } = await supabase
-          .from('au_director_locales')
-          .select('local_id')
-          .eq('director_cut', cut!)
-        const ids = (dl ?? []).map((r: { local_id: string }) => r.local_id)
-        if (ids.length > 0) {
-          const { data: l } = await supabase.from('au_locales').select('*').in('id', ids).order('nombre')
+      const asignados = await cargarLocalesAsignados(cut!, rol!)
+      setEsEncargado(rol === 'VISUALIZADOR' && asignados !== null)
+
+      if (asignados !== null) {
+        if (asignados.length > 0) {
+          const { data: l } = await supabase.from('au_locales').select('*').in('id', asignados).order('nombre')
           localesList = l ?? []
-          localIds    = ids
+          localIds    = asignados
         }
       } else {
         const { data: l } = await supabase.from('au_locales').select('*').order('nombre')
@@ -112,32 +113,8 @@ export default function AccionesMejoraPage() {
 
       if (localIds.length === 0) { setFilas([]); return }
 
-      // 1b. Director de cada local (au_director_locales → au_usuarios)
-      const { data: dlData, error: eDl } = await supabase
-        .from('au_director_locales')
-        .select('*')
-        .in('local_id', localIds)
-      if (eDl) throw eDl
-      const directorLocales = (dlData ?? []) as AuDirectorLocal[]
-
-      const directorCuts = Array.from(new Set(directorLocales.map(d => d.director_cut)))
-      const directorNombreMap: Record<string, string> = {}
-      if (directorCuts.length > 0) {
-        const { data: usersData, error: eUs } = await supabase
-          .from('au_usuarios')
-          .select('cut, nombre')
-          .in('cut', directorCuts)
-        if (eUs) throw eUs
-        ;(usersData ?? []).forEach((u: { cut: string; nombre: string }) => {
-          directorNombreMap[u.cut] = u.nombre
-        })
-      }
-
-      const localDirectorMap: Record<string, string> = {}
-      directorLocales.forEach(dl => {
-        const nombre = directorNombreMap[dl.director_cut]
-        if (nombre) localDirectorMap[dl.local_id] = nombre
-      })
+      // 1b. Director de cada local
+      const localDirectorMap = await cargarDirectorPorLocal(localIds)
       setDirectorPorLocal(localDirectorMap)
 
       // 2. Auditorías de esos locales
@@ -243,29 +220,31 @@ export default function AccionesMejoraPage() {
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-navy/10">
-        <button
-          type="button"
-          onClick={() => setTabTipo('locales')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
-            tabTipo === 'locales' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
-          }`}
-        >
-          Locales
-        </button>
-        <button
-          type="button"
-          onClick={() => setTabTipo('obradores')}
-          className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
-            tabTipo === 'obradores' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
-          }`}
-        >
-          Obradores
-        </button>
-      </div>
+      {/* Tabs (los encargados solo ven sus locales: sin pestaña de obradores) */}
+      {!esEncargado && (
+        <div className="flex gap-2 mb-6 border-b border-navy/10">
+          <button
+            type="button"
+            onClick={() => setTabTipo('locales')}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+              tabTipo === 'locales' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
+            }`}
+          >
+            Locales
+          </button>
+          <button
+            type="button"
+            onClick={() => setTabTipo('obradores')}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${
+              tabTipo === 'obradores' ? 'border-naranja text-naranja' : 'border-transparent text-navy/40 hover:text-navy/70'
+            }`}
+          >
+            Obradores
+          </button>
+        </div>
+      )}
 
-      {tabTipo === 'obradores' ? (
+      {tabTipo === 'obradores' && !esEncargado ? (
         <AccionesMejoraObradorSection />
       ) : (
       <>

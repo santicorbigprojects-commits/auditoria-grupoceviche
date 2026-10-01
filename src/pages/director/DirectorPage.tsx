@@ -7,6 +7,7 @@ import DetalleAuditoria from '../../components/director/DetalleAuditoria'
 import DetalleEvaluacionSA from '../../components/director/DetalleEvaluacionSA'
 import ConfirmModal from '../../components/ui/ConfirmModal'
 import { eliminarAuditoria } from '../../lib/eliminarAuditoria'
+import { cargarLocalesAsignados } from '../../lib/directores'
 import AccionesMejoraPage from '../AccionesMejoraPage'
 import ResultadoGeneralPage from '../ResultadoGeneralPage'
 
@@ -45,6 +46,7 @@ export default function DirectorPage() {
   const [tab, setTab] = useState<Tab>('resultado')
 
   const [locales,       setLocales]       = useState<AuLocal[]>([])
+  const [verTodos,      setVerTodos]      = useState(false)   // false = solo locales asignados
   const [marcas,        setMarcas]        = useState<AuMarca[]>([])
   const [latestByLocal, setLatestByLocal] = useState<Record<string, LatestAud>>({})
   const [latestSAByLocal, setLatestSAByLocal] = useState<Record<string, LatestSA>>({})
@@ -74,23 +76,26 @@ export default function DirectorPage() {
       let localesList: AuLocal[] = []
       let localIds: string[]     = []
 
-      if (rol === 'ADMIN' || rol === 'VISUALIZADOR') {
+      // Director y encargado (VISUALIZADOR con locales asignados) → solo los suyos.
+      // Si falla la carga, no se muestra ningún local (nunca todos por defecto).
+      let asignados: string[] | null = []
+      try {
+        asignados = await cargarLocalesAsignados(cut!, rol!)
+      } catch (err) {
+        console.error(err)
+      }
+      setVerTodos(asignados === null)
+
+      if (asignados === null) {
         const { data: l } = await supabase
           .from('au_locales').select('*').eq('activo', true).order('nombre')
         localesList = l ?? []
         localIds    = localesList.map(x => x.id)
-      } else {
-        const { data: dl } = await supabase
-          .from('au_director_locales')
-          .select('local_id')
-          .eq('director_cut', cut!)
-        const ids = (dl ?? []).map(r => r.local_id)
-        if (ids.length > 0) {
-          const { data: l } = await supabase
-            .from('au_locales').select('*').in('id', ids).eq('activo', true).order('nombre')
-          localesList = l ?? []
-          localIds    = ids
-        }
+      } else if (asignados.length > 0) {
+        const { data: l } = await supabase
+          .from('au_locales').select('*').in('id', asignados).eq('activo', true).order('nombre')
+        localesList = l ?? []
+        localIds    = asignados
       }
 
       setLocales(localesList)
@@ -258,7 +263,7 @@ export default function DirectorPage() {
               Seguridad alimentaria
             </h2>
             <p className="text-sm text-navy/40 mt-0.5">
-              {rol === 'ADMIN' || rol === 'VISUALIZADOR' ? 'Todos los locales' : 'Locales asignados a tu cuenta'}
+              {verTodos ? 'Todos los locales' : 'Locales asignados a tu cuenta'}
             </p>
           </div>
 
@@ -387,7 +392,7 @@ export default function DirectorPage() {
             Historial de auditorías
           </h2>
           <p className="text-sm text-navy/40 mt-0.5">
-            {rol === 'ADMIN' || rol === 'VISUALIZADOR' ? 'Todos los locales' : 'Locales asignados a tu cuenta'}
+            {verTodos ? 'Todos los locales' : 'Locales asignados a tu cuenta'}
           </p>
         </div>
 
